@@ -60,12 +60,16 @@ export function normalize(raw: Raw, rubric: Criterion[], step: number, sub: Subm
   return { scores, errors, comment: raw.comment || '', flags, reviewNote: raw.reviewNote || '' };
 }
 
+export const DEFAULT_CURRICULUM = 'Tin học 6 – bộ sách Kết nối tri thức với cuộc sống (học sinh lớp 6, 11–12 tuổi)';
+
 export function payloadFor(p: Project, sub: Submission, extraNote?: string) {
   return {
     exam: p.examText,
     examImages: p.examImages,
     rubric: p.rubric,
     instructions: p.instructions,
+    curriculum: p.curriculum || DEFAULT_CURRICULUM,
+    textbook: p.textbook || '',
     scoreStep: p.scoreStep,
     extraNote,
     submission: { fileNames: sub.fileNames, text: sub.text, analysis: sub.analysis, images: sub.images },

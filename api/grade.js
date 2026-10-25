@@ -8,6 +8,13 @@ Nguyên tắc:
 - Phần "PHÂN TÍCH ĐỊNH DẠNG" mô tả định dạng/cấu trúc file (cỡ chữ, căn lề, hiệu ứng, khối lệnh...). Dùng nó để chấm các tiêu chí về định dạng; không trích nó làm "quote".
 - Không bịa nội dung không có trong bài. Nếu không chắc, đặt confidence "thấp" và needsTeacher = true.
 - Nhận xét ngắn gọn, tích cực, xưng "em".
+
+CHUẨN KIẾN THỨC (rất quan trọng):
+- Chấm theo đúng phạm vi kiến thức của sách giáo khoa và lớp được ghi ở mục "PHẠM VI KIẾN THỨC", KHÔNG theo kiến thức chuyên sâu của người lớn hay chuyên gia.
+- Học sinh nhỏ tuổi: câu trả lời đúng ý chính như cách SGK trình bày là ĐỦ điểm, kể cả khi diễn đạt đơn giản, bằng lời của em, không dùng thuật ngữ chuyên môn, hoặc chưa đầy đủ theo nghĩa học thuật.
+- KHÔNG trừ điểm vì thiếu chi tiết, thuật ngữ hay ý nằm ngoài SGK. KHÔNG bắt lỗi những khái niệm SGK đã đơn giản hoá (ví dụ cách SGK định nghĩa thông tin, dữ liệu, mạng máy tính, thuật toán…) — cách hiểu theo SGK được coi là đúng.
+- Nếu có mục "NỘI DUNG SGK THAM KHẢO", đó là chuẩn để đối chiếu: ý nào khớp với SGK thì chấm đúng; chỉ trừ điểm khi học sinh hiểu SAI so với SGK hoặc thiếu ý mà tiêu chí yêu cầu.
+- Khi phân vân giữa cách hiểu chuyên sâu và cách hiểu theo SGK, luôn chọn cách hiểu theo SGK (có lợi cho học sinh) và ghi rõ trong "reason".
 Trả về JSON đúng dạng:
 {"scores":[{"criterionId":"...","score":0,"reason":"...","confidence":"cao|trung bình|thấp"}],
  "errors":[{"criterionId":"...","quote":"...","note":"..."}],
@@ -15,7 +22,7 @@ Trả về JSON đúng dạng:
 
 const REVIEW_EXTRA = `
 BẠN ĐANG Ở LƯỢT RÀ SOÁT. Dưới đây là kết quả chấm lần 1. Hãy kiểm tra lại thật kĩ từng tiêu chí:
-1) Điểm có đúng với tiêu chí và yêu cầu của giáo viên không, có chấm quá tay hay quá dễ không?
+1) Điểm có đúng với tiêu chí và yêu cầu của giáo viên không, có chấm quá tay hay quá dễ không? Có lần trừ điểm nào dựa trên kiến thức vượt SGK / khắt khe hơn chuẩn của lớp không — nếu có thì trả lại điểm.
 2) Mỗi "quote" có thật sự xuất hiện nguyên văn trong bài không? Nếu không, sửa lại cho đúng hoặc để rỗng.
 3) Có lỗi nào bị bỏ sót, hoặc lỗi nào bị trừ sai không?
 Trả về kết quả CUỐI CÙNG theo đúng định dạng JSON trên, thêm trường "reviewNote": mô tả ngắn những gì đã thay đổi so với lần 1 (chuỗi rỗng nếu giữ nguyên).`;
@@ -26,7 +33,9 @@ function buildParts(b) {
     .join('\n');
   const total = b.rubric.reduce((s, c) => s + Number(c.max || 0), 0);
   const sub = b.submission || {};
-  let text = `ĐỀ BÀI:\n${b.exam || '(không có)'}\n\nTIÊU CHÍ CHẤM (tổng ${total} điểm, bước điểm ${b.scoreStep || 0.25}):\n${rubric}\n\nYÊU CẦU CHẤM CỦA GIÁO VIÊN:\n${b.instructions || '(không có)'}\n`;
+  let text = `PHẠM VI KIẾN THỨC: ${b.curriculum || 'Tin học 6 – bộ sách Kết nối tri thức với cuộc sống (học sinh lớp 6, 11–12 tuổi)'}\n\n`;
+  if (b.textbook) text += `NỘI DUNG SGK THAM KHẢO (chuẩn để đối chiếu, do giáo viên cung cấp):\n${String(b.textbook).slice(0, 20000)}\n\n`;
+  text += `ĐỀ BÀI:\n${b.exam || '(không có)'}\n\nTIÊU CHÍ CHẤM (tổng ${total} điểm, bước điểm ${b.scoreStep || 0.25}):\n${rubric}\n\nYÊU CẦU CHẤM CỦA GIÁO VIÊN:\n${b.instructions || '(không có)'}\n`;
   if (b.extraNote) text += `\nGHI CHÚ THÊM CỦA GIÁO VIÊN CHO BÀI NÀY:\n${b.extraNote}\n`;
   text += `\nTÊN FILE BÀI LÀM: ${(sub.fileNames || []).join(', ') || '(không rõ)'}\n`;
   if (sub.analysis) text += `\nPHÂN TÍCH ĐỊNH DẠNG (do hệ thống trích từ file):\n${sub.analysis.slice(0, 30000)}\n`;

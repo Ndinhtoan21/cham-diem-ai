@@ -10,7 +10,7 @@ import { matchFiles } from '../lib/match';
 import { api } from '../lib/api';
 import { setSetting } from '../lib/store';
 import { uid, fmt } from '../lib/util';
-import { maxTotal } from '../lib/grading';
+import { maxTotal, DEFAULT_CURRICULUM } from '../lib/grading';
 
 type Props = { p: Project; update: Updater; files: File[]; setFiles: (f: File[]) => void };
 
@@ -190,8 +190,10 @@ export default function Setup({ p, update, files, setFiles }: Props) {
         </table>
       </section>
 
+      <TextbookSection p={p} update={update} />
+
       <section className="card">
-        <h2>4. Yêu cầu chấm của bạn</h2>
+        <h2>5. Yêu cầu chấm của bạn</h2>
         <p className="muted small">Mô tả cách bạn muốn chấm. AI sẽ ưu tiên những yêu cầu này hơn tiêu chí chung.</p>
         <textarea rows={5} value={p.instructions} onChange={(e) => update({ instructions: e.target.value })}
           placeholder={'VD:\n- Sai chính tả: trừ 0,25 mỗi lỗi, tối đa trừ 1 điểm ở tiêu chí nội dung.\n- Tiêu đề phải căn giữa, chữ đậm, cỡ 16 trở lên; thiếu một yêu cầu trừ 0,25.\n- Không trừ điểm phông chữ nếu HS dùng Arial thay Times New Roman.\n- Học sinh lớp 6, chấm nhẹ tay phần trình bày.'} />
@@ -206,7 +208,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
       </section>
 
       <section className="card">
-        <h2>5. Danh sách lớp</h2>
+        <h2>6. Danh sách lớp</h2>
         {classes.length > 0 && (
           <div className="row">
             <label className="inline">Lấy từ sổ điểm lớp
@@ -238,7 +240,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
       </section>
 
       <section className="card">
-        <h2>6. Bài làm của học sinh</h2>
+        <h2>7. Bài làm của học sinh</h2>
         <p className="muted small">Chọn thư mục chứa bài. Tên file hoặc tên thư mục con cần có họ tên (hoặc mã) học sinh, có dấu hay không dấu đều được. Hỗ trợ .docx, .pptx, .sb3, .pdf, ảnh, .xlsx, .py/.txt.</p>
         <div className="row">
           <button className="btn" onClick={() => folderRef.current?.click()}>Chọn thư mục bài làm</button>
@@ -254,5 +256,62 @@ export default function Setup({ p, update, files, setFiles }: Props) {
         {!ready && <span className="muted small">Cần có tiêu chí, danh sách lớp và bài làm.</span>}
       </div>
     </div>
+  );
+}
+
+
+type Lesson = { name: string; text: string };
+const loadLib = (): Lesson[] => { try { return JSON.parse(localStorage.getItem('cd:sgk') || '[]'); } catch { return []; } };
+const saveLib = (l: Lesson[]) => { try { localStorage.setItem('cd:sgk', JSON.stringify(l)); } catch { alert('Không lưu được vào thư viện (bộ nhớ trình duyệt đầy?).'); } };
+
+/** Phạm vi kiến thức: AI chỉ chấm theo chuẩn SGK của lớp, không theo kiến thức chuyên sâu. */
+function TextbookSection({ p, update }: { p: Project; update: Updater }) {
+  const [lib, setLib] = useState<Lesson[]>(loadLib);
+  const [msg, setMsg] = useState('');
+  async function onFile(f: File) {
+    try {
+      const r = await readTeacherFile(f);
+      const text = (p.textbook ? p.textbook + '\n\n' : '') + `### ${f.name.replace(/\.[^.]+$/, '')}\n${r.text}`;
+      update({ textbook: text, textbookName: p.textbookName || f.name.replace(/\.[^.]+$/, '') });
+      setMsg(r.text ? `Đã thêm nội dung ${f.name} (${r.text.length} ký tự).` : `Không đọc được chữ trong ${f.name} (có thể là bản scan) — hãy dán nội dung vào ô bên dưới.`);
+    } catch (e: any) { setMsg('Lỗi: ' + e.message); }
+  }
+  const len = (p.textbook || '').length;
+  return (
+    <section className="card">
+      <h2>4. Phạm vi kiến thức</h2>
+      <p className="muted small">AI chỉ chấm theo chuẩn kiến thức của SGK và lứa tuổi này: học sinh trả lời đúng ý như SGK (kể cả diễn đạt đơn giản) là đủ điểm; không trừ điểm vì thiếu kiến thức chuyên sâu ngoài sách.</p>
+      <label>Lớp / môn / bộ sách
+        <input value={p.curriculum ?? DEFAULT_CURRICULUM} onChange={(e) => update({ curriculum: e.target.value })} />
+      </label>
+      <h3>Nội dung SGK làm chuẩn (khuyên dùng)</h3>
+      <p className="muted small">Dán hoặc tải lên nội dung bài học liên quan trong SGK (các khái niệm, ghi nhớ, phần “Em có biết”…). AI sẽ đối chiếu câu trả lời của học sinh với đúng cách SGK viết.</p>
+      <div className="row">
+        <label className="btn">Tải file bài học (Word, PDF, ảnh)<input hidden type="file" accept=".docx,.pdf,.txt,.pptx,image/*" onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); e.target.value = ''; }} /></label>
+        {lib.length > 0 && (
+          <select style={{ width: 'auto' }} value="" onChange={(e) => {
+            const l = lib.find((x) => x.name === e.target.value);
+            if (l) { update({ textbook: (p.textbook ? p.textbook + '\n\n' : '') + `### ${l.name}\n${l.text}`, textbookName: p.textbookName || l.name }); setMsg(`Đã thêm "${l.name}" từ thư viện.`); }
+          }}>
+            <option value="">+ Thêm từ thư viện bài học đã lưu ({lib.length})</option>
+            {lib.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+          </select>
+        )}
+        {msg && <span className="muted small">{msg}</span>}
+      </div>
+      <textarea rows={6} value={p.textbook || ''} onChange={(e) => update({ textbook: e.target.value })}
+        placeholder={'VD: Bài 1. Thông tin và dữ liệu\n- (dán phần khái niệm, ghi nhớ của bài học trong SGK của bạn vào đây)'} />
+      <div className="row">
+        <span className={`small ${len > 20000 ? 'warn-text' : 'muted'}`}>{len.toLocaleString('vi-VN')} ký tự{len > 20000 ? ' — dài quá, chỉ 20.000 ký tự đầu được gửi cho AI. Nên chỉ giữ bài liên quan.' : ''}</span>
+        {len > 0 && <>
+          <input style={{ width: 260 }} placeholder="Tên để lưu, VD: Bài 1 – Thông tin và dữ liệu" value={p.textbookName || ''} onChange={(e) => update({ textbookName: e.target.value })} />
+          <button className="btn" disabled={!p.textbookName?.trim()} onClick={() => {
+            const name = p.textbookName!.trim();
+            const next = [...lib.filter((l) => l.name !== name), { name, text: p.textbook! }].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
+            saveLib(next); setLib(next); setMsg(`Đã lưu "${name}" vào thư viện — lần sau chọn lại được.`);
+          }}>Lưu vào thư viện</button>
+        </>}
+      </div>
+    </section>
   );
 }

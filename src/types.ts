@@ -53,6 +53,10 @@ export type Project = {
   examImages: string[];
   rubric: Criterion[];
   instructions: string;
+  /** Phạm vi kiến thức (lớp, môn, bộ sách) và nội dung SGK làm chuẩn chấm. */
+  curriculum?: string;
+  textbook?: string;
+  textbookName?: string;
   scoreStep: number;
   noSubmissionZero: boolean;
   students: Student[];
