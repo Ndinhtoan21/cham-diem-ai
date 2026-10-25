@@ -13,6 +13,7 @@ import SystemExport from './components/SystemExport';
 import Compare from './components/Compare';
 import { exportBackup, importBackup } from './lib/store';
 import { download } from './lib/util';
+import NewProjectDialog from './components/NewProjectDialog';
 
 export type View = 'projects' | 'classes' | 'systems' | 'compare';
 const VIEWS: [View, string][] = [['projects', 'Chấm bài'], ['classes', 'Sổ điểm lớp & điểm TX'], ['systems', 'Xuất FSP / CSDL'], ['compare', 'Đối chiếu FSP ↔ CSDL']];
@@ -37,6 +38,7 @@ export default function App() {
   const [p, setP] = useState<Project | null>(null);
   const [files, setFiles] = useState<File[]>([]); // student files picked this session (not persisted)
   const [view, setView] = useState<View>('projects');
+  const [creating, setCreating] = useState(false);
   const [server, setServer] = useState<{ provider?: string; model?: string; error?: string; needPassword?: boolean }>({});
   const saveTimer = useRef<number>();
 
@@ -93,8 +95,9 @@ export default function App() {
         </span>
       </header>
 
+      {creating && <NewProjectDialog onCancel={() => setCreating(false)} onCreate={(x) => { setCreating(false); openProject(x); }} />}
       {!p && view === 'classes' ? <ClassBooks /> : !p && view === 'systems' ? <SystemExport /> : !p && view === 'compare' ? <Compare /> : !p ? (
-        <Home projects={projects} onOpen={openProject} onNew={() => openProject(newProject())}
+        <Home projects={projects} onOpen={openProject} onNew={() => setCreating(true)}
           onDelete={async (id) => { await deleteProject(id); setProjects(await listProjects()); }}
           onRestored={async () => setProjects(await listProjects())} />
       ) : (

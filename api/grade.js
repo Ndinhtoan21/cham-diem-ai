@@ -34,7 +34,7 @@ function buildParts(b) {
   const total = b.rubric.reduce((s, c) => s + Number(c.max || 0), 0);
   const sub = b.submission || {};
   let text = `PHẠM VI KIẾN THỨC: ${b.curriculum || 'Tin học 6 – bộ sách Kết nối tri thức với cuộc sống (học sinh lớp 6, 11–12 tuổi)'}\n\n`;
-  if (b.textbook) text += `NỘI DUNG SGK THAM KHẢO (chuẩn để đối chiếu, do giáo viên cung cấp):\n${String(b.textbook).slice(0, 20000)}\n\n`;
+  if (b.textbook) text += `NỘI DUNG SGK THAM KHẢO (chuẩn để đối chiếu, do giáo viên cung cấp):\n${String(b.textbook).slice(0, 24000)}\n\n`;
   text += `ĐỀ BÀI:\n${b.exam || '(không có)'}\n\nTIÊU CHÍ CHẤM (tổng ${total} điểm, bước điểm ${b.scoreStep || 0.25}):\n${rubric}\n\nYÊU CẦU CHẤM CỦA GIÁO VIÊN:\n${b.instructions || '(không có)'}\n`;
   if (b.extraNote) text += `\nGHI CHÚ THÊM CỦA GIÁO VIÊN CHO BÀI NÀY:\n${b.extraNote}\n`;
   text += `\nTÊN FILE BÀI LÀM: ${(sub.fileNames || []).join(', ') || '(không rõ)'}\n`;

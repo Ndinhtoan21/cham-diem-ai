@@ -69,7 +69,7 @@ export function payloadFor(p: Project, sub: Submission, extraNote?: string) {
     rubric: p.rubric,
     instructions: p.instructions,
     curriculum: p.curriculum || DEFAULT_CURRICULUM,
-    textbook: p.textbook || '',
+    textbook: [p.sgkContext, p.textbook].filter(Boolean).join('\n\n'),
     scoreStep: p.scoreStep,
     extraNote,
     submission: { fileNames: sub.fileNames, text: sub.text, analysis: sub.analysis, images: sub.images },

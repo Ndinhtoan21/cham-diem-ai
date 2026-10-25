@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, Criterion, ClassBook, ScoreCol, Term } from '../types';
 import { COLS, TERMS, TERM_LABEL } from '../types';
-import { listClasses } from '../lib/store';
+import { listClasses, listTextbooks, saveTextbook } from '../lib/store';
+import { autoPick, contextFor, gradeOf, rankLessons, readTextbookFiles, type Textbook } from '../lib/textbook';
 import { findClassFor } from '../lib/gradebook';
 import type { Updater } from '../App';
 import { readTeacherFile, isJunkFile } from '../lib/extract';
@@ -134,7 +135,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
         <h2>1. Thông tin bài chấm</h2>
         <div className="grid2">
           <label>Tên bài<input value={p.name} onChange={(e) => update({ name: e.target.value })} placeholder="VD: Thực hành Word — Tin 6 — Giữa kì I" /></label>
-          <label>Lớp<input value={p.className} onChange={(e) => update({ className: e.target.value })} placeholder="VD: 6A1" /></label>
+          <label>Lớp<input value={p.className} onChange={(e) => update({ className: e.target.value, grade: gradeOf(e.target.value) || p.grade })} placeholder="VD: 6A1" /></label>
           <label>Trường<input value={p.school} onChange={(e) => { update({ school: e.target.value }); setSetting('school', e.target.value); }} /></label>
           <label>Giáo viên chấm<input value={p.teacher} onChange={(e) => { update({ teacher: e.target.value }); setSetting('teacher', e.target.value); }} /></label>
           <label>Học kì
@@ -264,54 +265,126 @@ type Lesson = { name: string; text: string };
 const loadLib = (): Lesson[] => { try { return JSON.parse(localStorage.getItem('cd:sgk') || '[]'); } catch { return []; } };
 const saveLib = (l: Lesson[]) => { try { localStorage.setItem('cd:sgk', JSON.stringify(l)); } catch { alert('Không lưu được vào thư viện (bộ nhớ trình duyệt đầy?).'); } };
 
-/** Phạm vi kiến thức: AI chỉ chấm theo chuẩn SGK của lớp, không theo kiến thức chuyên sâu. */
+/** Phạm vi kiến thức: AI chỉ chấm theo chuẩn SGK của khối, không theo kiến thức chuyên sâu. */
 function TextbookSection({ p, update }: { p: Project; update: Updater }) {
   const [lib, setLib] = useState<Lesson[]>(loadLib);
+  const [books, setBooks] = useState<Textbook[]>([]);
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => { listTextbooks().then(setBooks); }, []);
+  const grade = p.grade || gradeOf(p.className);
+  const subject = (p.curriculum || 'Tin học').split(/\s\d/)[0].trim() || 'Tin học';
+  const book = books.find((b) => b.grade === grade && b.subject === subject) || books.find((b) => b.grade === grade);
+  const query = [p.name, p.examText, p.rubric.map((c) => `${c.name} ${c.desc}`).join(' '), p.instructions].join(' ');
+  const ranked = useMemo(() => (book ? rankLessons(book, query) : []), [book, query]);
+  const auto = p.lessonsAuto !== false;
+  const picked = useMemo(() => (!book ? [] : auto ? autoPick(book, query) : (p.lessonIds || []).filter((id) => book.lessons.some((l) => l.id === id))), [book, auto, query, p.lessonIds]);
+
+  // giữ phần SGK sẽ gửi cho AI luôn khớp với lựa chọn
+  useEffect(() => {
+    const ctx = book ? contextFor(book, picked) : '';
+    const titles = book ? picked.map((id) => book.lessons.find((l) => l.id === id)!.title) : [];
+    if (ctx !== (p.sgkContext || '') || titles.join('|') !== (p.sgkTitles || []).join('|')) update({ sgkContext: ctx, sgkTitles: titles, grade });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book, picked.join(',')]);
+
+  const toggle = (id: string) => {
+    const cur = new Set(picked);
+    cur.has(id) ? cur.delete(id) : cur.add(id);
+    update({ lessonsAuto: false, lessonIds: [...cur] });
+  };
+
+  async function uploadBook(files: FileList | null) {
+    if (!files?.length || !grade) return;
+    setBusy(true);
+    try {
+      const r = await readTextbookFiles(Array.from(files), grade, subject);
+      if (book) r.book.id = book.id;
+      await saveTextbook(r.book);
+      setBooks(await listTextbooks());
+      update({ lessonsAuto: true, lessonIds: [] });
+      setMsg(`Đã đọc ${r.book.lessons.length} bài từ ${r.book.fileNames.join(', ')}. ${r.warnings.join(' ')}`);
+    } catch (e: any) { setMsg('Lỗi: ' + e.message); }
+    setBusy(false);
+  }
+
   async function onFile(f: File) {
     try {
       const r = await readTeacherFile(f);
-      const text = (p.textbook ? p.textbook + '\n\n' : '') + `### ${f.name.replace(/\.[^.]+$/, '')}\n${r.text}`;
-      update({ textbook: text, textbookName: p.textbookName || f.name.replace(/\.[^.]+$/, '') });
-      setMsg(r.text ? `Đã thêm nội dung ${f.name} (${r.text.length} ký tự).` : `Không đọc được chữ trong ${f.name} (có thể là bản scan) — hãy dán nội dung vào ô bên dưới.`);
+      update({ textbook: (p.textbook ? p.textbook + '\n\n' : '') + `### ${f.name.replace(/\.[^.]+$/, '')}\n${r.text}` });
+      setMsg(r.text ? `Đã thêm nội dung ${f.name}.` : `Không đọc được chữ trong ${f.name} (bản scan?).`);
     } catch (e: any) { setMsg('Lỗi: ' + e.message); }
   }
+  const sgkLen = (p.sgkContext || '').length;
   const len = (p.textbook || '').length;
+  const shown = showAll ? ranked : ranked.filter((r, i) => i < 8 || picked.includes(r.lesson.id));
+
   return (
     <section className="card">
       <h2>4. Phạm vi kiến thức</h2>
-      <p className="muted small">AI chỉ chấm theo chuẩn kiến thức của SGK và lứa tuổi này: học sinh trả lời đúng ý như SGK (kể cả diễn đạt đơn giản) là đủ điểm; không trừ điểm vì thiếu kiến thức chuyên sâu ngoài sách.</p>
-      <label>Lớp / môn / bộ sách
-        <input value={p.curriculum ?? DEFAULT_CURRICULUM} onChange={(e) => update({ curriculum: e.target.value })} />
-      </label>
-      <h3>Nội dung SGK làm chuẩn (khuyên dùng)</h3>
-      <p className="muted small">Dán hoặc tải lên nội dung bài học liên quan trong SGK (các khái niệm, ghi nhớ, phần “Em có biết”…). AI sẽ đối chiếu câu trả lời của học sinh với đúng cách SGK viết.</p>
-      <div className="row">
-        <label className="btn">Tải file bài học (Word, PDF, ảnh)<input hidden type="file" accept=".docx,.pdf,.txt,.pptx,image/*" onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); e.target.value = ''; }} /></label>
-        {lib.length > 0 && (
-          <select style={{ width: 'auto' }} value="" onChange={(e) => {
-            const l = lib.find((x) => x.name === e.target.value);
-            if (l) { update({ textbook: (p.textbook ? p.textbook + '\n\n' : '') + `### ${l.name}\n${l.text}`, textbookName: p.textbookName || l.name }); setMsg(`Đã thêm "${l.name}" từ thư viện.`); }
-          }}>
-            <option value="">+ Thêm từ thư viện bài học đã lưu ({lib.length})</option>
-            {lib.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
-          </select>
+      <p className="muted small">AI chấm theo chuẩn kiến thức của SGK và lứa tuổi này: trả lời đúng ý như SGK (kể cả diễn đạt đơn giản) là đủ điểm; không trừ điểm vì thiếu kiến thức chuyên sâu ngoài sách.</p>
+      <div className="grid2">
+        <label>Lớp / môn / bộ sách
+          <input value={p.curriculum ?? DEFAULT_CURRICULUM} onChange={(e) => update({ curriculum: e.target.value })} />
+        </label>
+        <label>Khối
+          <input value={grade} onChange={(e) => update({ grade: e.target.value.replace(/\D/g, '') })} placeholder="VD: 6" />
+        </label>
+      </div>
+
+      <div className={`sgk-box ${book ? 'ok' : ''}`}>
+        <div className="row between" style={{ margin: 0 }}>
+          <b>{book ? `SGK ${book.name}: ${book.lessons.length} bài (${book.fileNames.join(', ')})` : grade ? `Chưa có SGK khối ${grade}` : 'Nhập tên lớp / khối để dùng SGK'}</b>
+          {grade && <label className="btn">{busy ? 'Đang đọc sách…' : book ? 'Thay file SGK' : `Tải SGK khối ${grade}`}<input hidden type="file" multiple accept=".pdf,.docx,.txt" disabled={busy} onChange={(e) => { uploadBook(e.target.files); e.target.value = ''; }} /></label>}
+        </div>
+        {book && (
+          <>
+            <div className="row small" style={{ margin: '8px 0 0' }}>
+              <label className="inline small"><input type="radio" checked={auto} onChange={() => update({ lessonsAuto: true })} /> Tự chọn bài liên quan tới đề & tiêu chí</label>
+              <label className="inline small"><input type="radio" checked={!auto} onChange={() => update({ lessonsAuto: false, lessonIds: picked })} /> Tôi tự chọn</label>
+            </div>
+            {!query.trim() || !ranked.some((r) => r.score > 0) ? <p className="small warn-text">Nhập đề bài và tiêu chí để app tìm bài SGK liên quan (hoặc tự tích chọn).</p> : null}
+            <div className="lesson-list">
+              {shown.map(({ lesson, score }) => (
+                <label key={lesson.id}><input type="checkbox" checked={picked.includes(lesson.id)} onChange={() => toggle(lesson.id)} />{lesson.title}<span className="rel">{score > 0 ? `liên quan ${Math.round(score)}` : ''}</span></label>
+              ))}
+              {!showAll && ranked.length > shown.length && <button className="link small" onClick={() => setShowAll(true)}>Xem tất cả {ranked.length} bài</button>}
+            </div>
+            <p className="small muted">Gửi cho AI: {picked.length ? `${p.sgkTitles?.join('; ')} (${sgkLen.toLocaleString('vi-VN')} ký tự)` : 'chưa chọn bài nào'}.</p>
+          </>
         )}
-        {msg && <span className="muted small">{msg}</span>}
+        {msg && <p className="small">{msg}</p>}
       </div>
-      <textarea rows={6} value={p.textbook || ''} onChange={(e) => update({ textbook: e.target.value })}
-        placeholder={'VD: Bài 1. Thông tin và dữ liệu\n- (dán phần khái niệm, ghi nhớ của bài học trong SGK của bạn vào đây)'} />
-      <div className="row">
-        <span className={`small ${len > 20000 ? 'warn-text' : 'muted'}`}>{len.toLocaleString('vi-VN')} ký tự{len > 20000 ? ' — dài quá, chỉ 20.000 ký tự đầu được gửi cho AI. Nên chỉ giữ bài liên quan.' : ''}</span>
-        {len > 0 && <>
-          <input style={{ width: 260 }} placeholder="Tên để lưu, VD: Bài 1 – Thông tin và dữ liệu" value={p.textbookName || ''} onChange={(e) => update({ textbookName: e.target.value })} />
-          <button className="btn" disabled={!p.textbookName?.trim()} onClick={() => {
-            const name = p.textbookName!.trim();
-            const next = [...lib.filter((l) => l.name !== name), { name, text: p.textbook! }].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
-            saveLib(next); setLib(next); setMsg(`Đã lưu "${name}" vào thư viện — lần sau chọn lại được.`);
-          }}>Lưu vào thư viện</button>
-        </>}
-      </div>
+
+      <details>
+        <summary>Ghi chú kiến thức thêm (dán đoạn SGK / giáo án riêng)</summary>
+        <div className="row">
+          <label className="btn">Tải file (Word, PDF, ảnh)<input hidden type="file" accept=".docx,.pdf,.txt,.pptx,image/*" onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); e.target.value = ''; }} /></label>
+          {lib.length > 0 && (
+            <select style={{ width: 'auto' }} value="" onChange={(e) => {
+              const l = lib.find((x) => x.name === e.target.value);
+              if (l) update({ textbook: (p.textbook ? p.textbook + '\n\n' : '') + `### ${l.name}\n${l.text}` });
+            }}>
+              <option value="">+ Thêm từ ghi chú đã lưu ({lib.length})</option>
+              {lib.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+            </select>
+          )}
+        </div>
+        <textarea rows={5} value={p.textbook || ''} onChange={(e) => update({ textbook: e.target.value })}
+          placeholder={'VD: Bài 1. Thông tin và dữ liệu\n- (dán phần khái niệm, ghi nhớ của bài học vào đây)'} />
+        <div className="row">
+          <span className={`small ${sgkLen + len > 24000 ? 'warn-text' : 'muted'}`}>{len.toLocaleString('vi-VN')} ký tự{sgkLen + len > 24000 ? ' — tổng SGK + ghi chú quá dài, phần cuối sẽ bị cắt.' : ''}</span>
+          {len > 0 && <>
+            <input style={{ width: 260 }} placeholder="Tên để lưu, VD: Bài 1 – Thông tin và dữ liệu" value={p.textbookName || ''} onChange={(e) => update({ textbookName: e.target.value })} />
+            <button className="btn" disabled={!p.textbookName?.trim()} onClick={() => {
+              const name = p.textbookName!.trim();
+              const next = [...lib.filter((l) => l.name !== name), { name, text: p.textbook! }].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
+              saveLib(next); setLib(next); setMsg(`Đã lưu "${name}".`);
+            }}>Lưu ghi chú</button>
+          </>}
+        </div>
+      </details>
     </section>
   );
 }

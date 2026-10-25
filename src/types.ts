@@ -57,6 +57,12 @@ export type Project = {
   curriculum?: string;
   textbook?: string;
   textbookName?: string;
+  /** Khối lớp (lấy từ tên lớp) → SGK của khối; các bài SGK được chọn làm chuẩn chấm. */
+  grade?: string;
+  lessonIds?: string[];
+  lessonsAuto?: boolean;
+  sgkContext?: string;
+  sgkTitles?: string[];
   scoreStep: number;
   noSubmissionZero: boolean;
   students: Student[];

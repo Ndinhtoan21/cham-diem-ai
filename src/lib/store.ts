@@ -1,18 +1,21 @@
 import type { ClassBook, Project } from '../types';
+import type { Textbook } from './textbook';
 
 // Tiny IndexedDB key-value store. Everything stays in this browser on this computer.
 const DB = 'cham-diem-ai';
 const STORE = 'projects';
 
 const CLASSES = 'classes';
+const BOOKS = 'textbooks';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 2);
+    const req = indexedDB.open(DB, 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
       if (!db.objectStoreNames.contains(CLASSES)) db.createObjectStore(CLASSES);
+      if (!db.objectStoreNames.contains(BOOKS)) db.createObjectStore(BOOKS);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -45,17 +48,24 @@ export async function listClasses(): Promise<ClassBook[]> {
   return all.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
 }
 
+// ---- SGK theo khối ----
+export const saveTextbook = (b: Textbook) => tx('readwrite', (s) => s.put(b, b.id), BOOKS);
+export const deleteTextbook = (id: string) => tx('readwrite', (s) => s.delete(id), BOOKS);
+export const listTextbooks = () => tx<Textbook[]>('readonly', (s) => s.getAll(), BOOKS);
+
 /** Full backup of everything in this browser (projects + class books). */
 export async function exportBackup(): Promise<Blob> {
   const projects = await tx<Project[]>('readonly', (s) => s.getAll());
   const classes = await tx<ClassBook[]>('readonly', (s) => s.getAll(), CLASSES);
-  return new Blob([JSON.stringify({ app: 'cham-diem-ai', version: 2, savedAt: new Date().toISOString(), projects, classes })], { type: 'application/json' });
+  const textbooks = await listTextbooks();
+  return new Blob([JSON.stringify({ app: 'cham-diem-ai', version: 3, savedAt: new Date().toISOString(), projects, classes, textbooks })], { type: 'application/json' });
 }
 export async function importBackup(file: File): Promise<{ projects: number; classes: number }> {
   const data = JSON.parse(await file.text());
   if (data.app !== 'cham-diem-ai') throw new Error('Không phải file sao lưu của Chấm Điểm AI.');
   for (const p of data.projects || []) await tx('readwrite', (s) => s.put(p, p.id));
   for (const c of data.classes || []) await tx('readwrite', (s) => s.put(c, c.id), CLASSES);
+  for (const b of data.textbooks || []) await saveTextbook(b);
   return { projects: (data.projects || []).length, classes: (data.classes || []).length };
 }
 
