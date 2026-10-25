@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Updater as U } from '../App';
 import type { Project, Result, Student } from '../types';
 import type { Updater } from '../App';
 import { classChecks, gradeOne, maxTotal, totalOf } from '../lib/grading';
@@ -13,14 +14,30 @@ export function useGrader(p: Project, update: Updater) {
   const setResult = (id: string, r: Partial<Result>) =>
     update((x) => ({ results: { ...x.results, [id]: { ...(x.results[id] || { scores: [], errors: [], comment: '', flags: [], checked: false, status: 'idle' }), ...r } as Result } }));
 
+  const spentRef = useRef(0);
+  const [budgetHit, setBudgetHit] = useState('');
+
   async function run(list: Student[], extraNote?: string) {
     if (!list.length) return;
     stop.current = false;
+    setBudgetHit('');
+    spentRef.current = p.spent?.cost || 0;
+    const budget = p.budget ?? (Number(getSetting('budget')) || 10);
     setRunning(true);
     await pool(list, 3, async (s) => {
+      if (spentRef.current >= budget) {
+        stop.current = true;
+        setBudgetHit(`Đã chạm hạn mức chi phí $${budget} — dừng chấm. Tăng hạn mức nếu muốn chấm tiếp.`);
+        return;
+      }
       try {
         const r = await gradeOne(p, s, (phase) => setResult(s.id, { status: phase }), extraNote);
         setResult(s.id, r);
+        if (r.usage) {
+          spentRef.current += r.usage.cost;
+          const u = r.usage;
+          update((x) => ({ spent: { input: (x.spent?.input || 0) + u.input, output: (x.spent?.output || 0) + u.output, cost: (x.spent?.cost || 0) + u.cost, calls: (x.spent?.calls || 0) + 1 } }));
+        }
       } catch (e: any) {
         setResult(s.id, { status: 'error', errorMsg: e.message });
         if (e.status === 401) stop.current = true;
@@ -28,11 +45,11 @@ export function useGrader(p: Project, update: Updater) {
     }, () => stop.current);
     setRunning(false);
   }
-  return { running, run, stop: () => (stop.current = true) };
+  return { running, run, stop: () => (stop.current = true), budgetHit };
 }
 
 export default function Grading({ p, update }: { p: Project; update: Updater }) {
-  const { running, run, stop } = useGrader(p, update);
+  const { running, run, stop, budgetHit } = useGrader(p, update);
   const started = useRef(false);
 
   const pending = p.students.filter((s) => !p.results[s.id] || ['idle', 'error'].includes(p.results[s.id].status));
@@ -69,6 +86,8 @@ export default function Grading({ p, update }: { p: Project; update: Updater }) 
           </div>
         </div>
         <div className="progress"><div style={{ width: pct + '%' }} /></div>
+        <CostBar p={p} update={update} pending={pending.length} />
+        {budgetHit && <p className="danger-text">{budgetHit}</p>}
         <p className="muted small">Mỗi bài được chấm 2 lượt: chấm theo tiêu chí, rồi AI tự rà soát lại; sau đó hệ thống kiểm tra tự động (điểm vượt tối đa, trích dẫn lỗi có thật trong bài không, trừ điểm có lý do không…).</p>
       </section>
 
@@ -100,6 +119,25 @@ export default function Grading({ p, update }: { p: Project; update: Updater }) 
           </tbody>
         </table>
       </section>
+    </div>
+  );
+}
+
+const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
+
+/** Chi phí AI đã dùng, ước tính phần còn lại và hạn mức (ràng buộc chi phí). */
+function CostBar({ p, update, pending }: { p: Project; update: U; pending: number }) {
+  const s = p.spent;
+  const budget = p.budget ?? (Number(getSetting('budget')) || 10);
+  const per = s && s.calls ? s.cost / s.calls : 0;
+  return (
+    <div className="costbar small">
+      <span>Chi phí AI: <b>{usd(s?.cost || 0)}</b>{s?.calls ? ` cho ${s.calls} bài (TB ${usd(per)}/bài, ${Math.round(s.input / s.calls / 1000)}k token vào · ${Math.round(s.output / s.calls / 1000)}k token ra)` : ''}</span>
+      {per > 0 && pending > 0 && <span className="muted">Ước tính {pending} bài còn lại: ~{usd(per * pending)}</span>}
+      <label className="inline small">Hạn mức cho bài chấm này ($)
+        <input type="number" min={0} step={1} style={{ width: 80 }} value={budget}
+          onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); update({ budget: v }); setSetting('budget', String(v)); }} />
+      </label>
     </div>
   );
 }

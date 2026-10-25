@@ -1,6 +1,6 @@
 import { api } from './api';
 import { collapse, roundStep, normKey } from './util';
-import type { Criterion, ErrorItem, Project, Result, Score, Student, Submission } from '../types';
+import type { Criterion, ErrorItem, Project, Result, Score, Student, Submission, Usage } from '../types';
 
 type Raw = {
   scores?: { criterionId: string; score: number; reason?: string; confidence?: string }[];
@@ -9,7 +9,9 @@ type Raw = {
   needsTeacher?: boolean;
   needsTeacherReason?: string;
   reviewNote?: string;
+  _usage?: Usage;
 };
+const addUsage = (a: Usage | undefined, b: Usage | undefined): Usage => ({ input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0), cost: (a?.cost || 0) + (b?.cost || 0) });
 
 export const effective = (s: Score) => (s.teacher != null ? s.teacher : s.ai);
 export const totalOf = (r?: Result) => (r ? Math.round(r.scores.reduce((a, s) => a + effective(s), 0) * 100) / 100 : 0);
@@ -96,11 +98,14 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
   }
   if (dropped.length) sub.warnings = [...sub.warnings, `Bài quá nặng: ${dropped.length} hình cuối không được gửi cho AI — cần xem tay phần đó.`];
   const first = await api<Raw>('grade', { ...base, mode: 'grade' });
+  let usage = addUsage(undefined, first._usage);
+  delete first._usage;
   const firstNorm = normalize(first, p.rubric, p.scoreStep, sub);
   onPhase('reviewing');
   let final = firstNorm;
   try {
     const reviewed = await api<Raw>('grade', { ...base, mode: 'review', previous: first });
+    usage = addUsage(usage, reviewed._usage);
     final = normalize(reviewed, p.rubric, p.scoreStep, sub);
     const changed = p.rubric
       .map((c, i) => (firstNorm.scores[i].ai !== final.scores[i].ai ? `${c.name}: ${firstNorm.scores[i].ai} → ${final.scores[i].ai}` : ''))
@@ -110,7 +115,7 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
     final.flags.push(`Lượt rà soát lại bị lỗi (${e.message}) — đang dùng kết quả chấm lần 1.`);
   }
   final.flags.push(...sub.warnings);
-  return { status: 'done', ...final, checked: false, gradedAt: Date.now() };
+  return { status: 'done', ...final, checked: false, gradedAt: Date.now(), usage };
 }
 
 /** Checks across the whole class after grading. */

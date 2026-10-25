@@ -22,7 +22,14 @@ export async function POST(request) {
         .filter(Boolean);
       return json({ criteria, notes: '(Mô phỏng) Tách theo dòng có điểm ở cuối.' });
     }
-    const out = await callModel({ system: SYSTEM, parts: [{ type: 'text', text }], maxTokens: 3000 });
+    const schema = {
+      type: 'object', additionalProperties: false, required: ['criteria', 'notes'],
+      properties: {
+        criteria: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'max', 'desc'], properties: { name: { type: 'string' }, max: { type: 'number' }, desc: { type: 'string' } } } },
+        notes: { type: 'string' },
+      },
+    };
+    const out = await callModel({ system: SYSTEM, parts: [{ type: 'text', text }], maxTokens: 3000, schema, schemaName: 'tieu_chi' });
     return json(out);
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);

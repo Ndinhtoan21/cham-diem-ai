@@ -37,7 +37,10 @@ export type Result = {
   errorMsg?: string;
   gradedAt?: number;
   noSubmission?: boolean;
+  usage?: Usage;
 };
+
+export type Usage = { input: number; output: number; cost: number };
 
 export type Project = {
   id: string;
@@ -65,6 +68,9 @@ export type Project = {
   term?: Term;
   column?: ScoreCol;
   postedAt?: number;
+  /** Chi phí AI đã dùng cho bài chấm này (USD, ước tính theo giá model) và hạn mức. */
+  spent?: Usage & { calls: number };
+  budget?: number;
   step: number;
   createdAt: number;
   updatedAt: number;

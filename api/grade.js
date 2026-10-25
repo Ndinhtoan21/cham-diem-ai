@@ -1,4 +1,4 @@
-import { json, checkAuth, callModel, provider } from './_lib.js';
+import { json, checkAuth, callModel, provider, prices } from './_lib.js';
 
 const SYSTEM = `Bạn là giáo viên Tin học cấp THCS chấm bài thực hành/tự luận một cách cẩn thận, công bằng và nhất quán.
 Nguyên tắc:
@@ -38,6 +38,39 @@ function buildParts(b) {
   return parts;
 }
 
+/** Khuôn kết quả bắt buộc: chỉ được dùng đúng mã tiêu chí của đề, độ chắc chắn trong 3 mức. */
+function gradeSchema(rubric) {
+  const ids = rubric.map((c) => String(c.id));
+  const str = { type: 'string' };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['scores', 'errors', 'comment', 'needsTeacher', 'needsTeacherReason', 'reviewNote'],
+    properties: {
+      scores: {
+        type: 'array',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['criterionId', 'score', 'reason', 'confidence'],
+          properties: { criterionId: { type: 'string', enum: ids }, score: { type: 'number' }, reason: str, confidence: { type: 'string', enum: ['cao', 'trung bình', 'thấp'] } },
+        },
+      },
+      errors: {
+        type: 'array',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['criterionId', 'quote', 'note'],
+          properties: { criterionId: { type: 'string', enum: ids }, quote: str, note: str },
+        },
+      },
+      comment: str,
+      needsTeacher: { type: 'boolean' },
+      needsTeacherReason: str,
+      reviewNote: str,
+    },
+  };
+}
+
 function mockGrade(b) {
   // Deterministic fake result so the interface can be tried without an API key.
   const text = b.submission?.text || '';
@@ -61,6 +94,7 @@ function mockGrade(b) {
     needsTeacher: seed % 5 === 0,
     needsTeacherReason: seed % 5 === 0 ? '(Mô phỏng) Bài có phần khó đánh giá.' : '',
     ...(b.mode === 'review' ? { reviewNote: '' } : {}),
+    _usage: { input: 6000, output: 2500, cost: (6000 * prices().input + 2500 * prices().output) / 1e6 },
   };
 }
 
@@ -79,7 +113,7 @@ export async function POST(request) {
       await new Promise((r) => setTimeout(r, 300));
       return json(mockGrade(b));
     }
-    const result = await callModel({ system: SYSTEM, parts: buildParts(b), maxTokens: 4000 });
+    const result = await callModel({ system: SYSTEM, parts: buildParts(b), maxTokens: 4000, schema: gradeSchema(b.rubric), schemaName: 'ket_qua_cham' });
     return json(result);
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);

@@ -29,10 +29,21 @@ Máy chủ chỉ chuyển bài làm sang AI để chấm. Muốn chuyển sang m
 
 | Biến | Ý nghĩa |
 |---|---|
-| `OPENAI_API_KEY` *hoặc* `ANTHROPIC_API_KEY` | Khóa API của AI chấm bài (chọn một trong hai) |
-| `AI_PROVIDER` | (tuỳ chọn) `openai` hoặc `anthropic` khi đặt cả hai khóa |
-| `OPENAI_MODEL` / `ANTHROPIC_MODEL` | (tuỳ chọn) mặc định `gpt-4o` / `claude-sonnet-5-5` |
+| `OPENAI_API_KEY` | Khóa API OpenAI (bắt buộc) |
 | `APP_PASSWORD` | **Nên đặt.** Mật khẩu vào app, để người khác có link cũng không dùng được khóa API của bạn |
+| `OPENAI_MODEL` | (tuỳ chọn) mặc định `gpt-6-astra` — mạnh nhất. Rẻ hơn: `gpt-6.1-sol`, `gpt-6-luna` |
+| `OPENAI_REASONING_EFFORT` | (tuỳ chọn) mức suy nghĩ: `low` · `medium` (mặc định) · `high` · `xhigh` · `max`. Càng cao càng kĩ nhưng càng tốn token |
+| `MAX_OUTPUT_TOKENS` | (tuỳ chọn) trần token trả về mỗi lần gọi, mặc định 12000 |
+| `MAX_IMAGES` | (tuỳ chọn) số hình tối đa gửi cho AI mỗi bài, mặc định 6 |
+| `PRICE_INPUT_PER_M` / `PRICE_OUTPUT_PER_M` | (tuỳ chọn) giá USD/1 triệu token để app ước tính chi phí, khi OpenAI đổi giá |
+| `ANTHROPIC_API_KEY`, `AI_PROVIDER=anthropic` | (tuỳ chọn) dùng Claude thay cho OpenAI |
+
+**Ràng buộc trong app:**
+- AI bắt buộc trả lời đúng khuôn JSON (Structured Outputs). Mã tiêu chí chỉ được là các mã có trong đề, độ chắc chắn chỉ có 3 mức.
+- Điểm được kẹp trong khoảng 0 đến điểm tối đa của từng tiêu chí.
+- Mỗi lần gọi có trần token và trần số hình.
+- Mỗi bài chấm có **hạn mức chi phí** (mặc định $10, sửa ở màn hình Chấm bài). Chạm hạn mức thì app tự dừng.
+- Màn hình chấm hiện chi phí đã dùng, trung bình mỗi bài, và ước tính cho số bài còn lại.
 
 4. Thêm biến xong thì bấm **Redeploy**.
 
