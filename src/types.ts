@@ -40,7 +40,7 @@ export type Result = {
   usage?: Usage;
 };
 
-export type Usage = { input: number; output: number; cost: number };
+export type Usage = { input: number; output: number; cost: number; model?: string };
 
 export type Project = {
   id: string;

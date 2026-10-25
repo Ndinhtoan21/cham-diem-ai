@@ -29,14 +29,19 @@ Máy chủ chỉ chuyển bài làm sang AI để chấm. Muốn chuyển sang m
 
 | Biến | Ý nghĩa |
 |---|---|
-| `OPENAI_API_KEY` | Khóa API OpenAI (bắt buộc) |
-| `APP_PASSWORD` | **Nên đặt.** Mật khẩu vào app, để người khác có link cũng không dùng được khóa API của bạn |
-| `OPENAI_MODEL` | (tuỳ chọn) mặc định `gpt-6-astra` — mạnh nhất. Rẻ hơn: `gpt-6.1-sol`, `gpt-6-luna` |
-| `OPENAI_REASONING_EFFORT` | (tuỳ chọn) mức suy nghĩ: `low` · `medium` (mặc định) · `high` · `xhigh` · `max`. Càng cao càng kĩ nhưng càng tốn token |
-| `MAX_OUTPUT_TOKENS` | (tuỳ chọn) trần token trả về mỗi lần gọi, mặc định 12000 |
-| `MAX_IMAGES` | (tuỳ chọn) số hình tối đa gửi cho AI mỗi bài, mặc định 6 |
-| `PRICE_INPUT_PER_M` / `PRICE_OUTPUT_PER_M` | (tuỳ chọn) giá USD/1 triệu token để app ước tính chi phí, khi OpenAI đổi giá |
-| `ANTHROPIC_API_KEY`, `AI_PROVIDER=anthropic` | (tuỳ chọn) dùng Claude thay cho OpenAI |
+| `OPENAI_API_KEY` | Khóa API OpenAI |
+| `GEMINI_API_KEY` | (tuỳ chọn) khóa Google AI Studio để dùng Gemini |
+| `DEEPSEEK_API_KEY` | (tuỳ chọn) khóa DeepSeek |
+| `APP_PASSWORD` | **Nên đặt.** Mật khẩu vào app |
+| `MODEL_GRADE` | Mô hình chấm lượt 1, dạng `nhà_cung_cấp:mô_hình`. Mặc định `openai:gpt-6-luna` |
+| `MODEL_REVIEW` | Mô hình tự rà soát lượt 2. Mặc định `openai:gpt-6-luna` |
+| `MODEL_ESCALATE` | Mô hình mạnh hơn, **chỉ** chấm lại những bài còn cảnh báo. Mặc định `openai:gpt-6.1-sol`; `off` để tắt |
+| `MODEL_RUBRIC` | Mô hình tách tiêu chí. Mặc định `openai:gpt-6-luna` |
+| `REASONING_EFFORT` | Mức suy nghĩ: `low` (mặc định) · `medium` · `high` |
+| `MAX_OUTPUT_TOKENS`, `MAX_IMAGES` | Trần token trả về (8000) và số hình gửi mỗi bài (6) |
+| `PRICE_<TÊN_MÔ_HÌNH>` | Giá mới "vào,ra" USD/1 triệu token khi nhà cung cấp đổi giá, VD `PRICE_GEMINI_3_8_FLASH=1.5,7.5` |
+
+Ví dụ kết hợp nhiều hãng: `MODEL_GRADE=gemini:gemini-3.1-flash-lite`, `MODEL_REVIEW=openai:gpt-6-luna`, `MODEL_ESCALATE=gemini:gemini-3.8-flash`.
 
 **Ràng buộc trong app:**
 - AI bắt buộc trả lời đúng khuôn JSON (Structured Outputs). Mã tiêu chí chỉ được là các mã có trong đề, độ chắc chắn chỉ có 3 mức.

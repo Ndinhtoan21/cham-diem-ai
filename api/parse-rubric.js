@@ -29,7 +29,7 @@ export async function POST(request) {
         notes: { type: 'string' },
       },
     };
-    const out = await callModel({ system: SYSTEM, parts: [{ type: 'text', text }], maxTokens: 3000, schema, schemaName: 'tieu_chi' });
+    const out = await callModel({ route: 'rubric', system: SYSTEM, parts: [{ type: 'text', text }], maxTokens: 3000, schema, schemaName: 'tieu_chi' });
     return json(out);
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);

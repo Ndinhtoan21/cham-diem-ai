@@ -1,4 +1,4 @@
-import { json, checkAuth, callModel, provider, prices } from './_lib.js';
+import { json, checkAuth, callModel, provider, priceOf, modelFor } from './_lib.js';
 
 const SYSTEM = `Bạn là giáo viên Tin học cấp THCS chấm bài thực hành/tự luận một cách cẩn thận, công bằng và nhất quán.
 Nguyên tắc:
@@ -31,7 +31,7 @@ function buildParts(b) {
   text += `\nTÊN FILE BÀI LÀM: ${(sub.fileNames || []).join(', ') || '(không rõ)'}\n`;
   if (sub.analysis) text += `\nPHÂN TÍCH ĐỊNH DẠNG (do hệ thống trích từ file):\n${sub.analysis.slice(0, 30000)}\n`;
   text += `\nNỘI DUNG BÀI LÀM:\n${(sub.text || '(không đọc được chữ — xem hình ảnh đính kèm nếu có)').slice(0, 40000)}\n`;
-  if (b.mode === 'review' && b.previous) text += `${REVIEW_EXTRA}\n\nKẾT QUẢ LẦN 1:\n${JSON.stringify(b.previous)}`;
+  if ((b.mode === 'review' || b.mode === 'escalate') && b.previous) text += `${REVIEW_EXTRA}\n\nKẾT QUẢ LẦN 1:\n${JSON.stringify(b.previous)}`;
   const parts = [{ type: 'text', text }];
   (b.examImages || []).slice(0, 2).forEach((url) => parts.push({ type: 'text', text: 'Hình trong đề bài:' }, { type: 'image', url }));
   (sub.images || []).slice(0, 6).forEach((url, i) => parts.push({ type: 'text', text: `Hình ${i + 1} trong bài làm:` }, { type: 'image', url }));
@@ -94,7 +94,7 @@ function mockGrade(b) {
     needsTeacher: seed % 5 === 0,
     needsTeacherReason: seed % 5 === 0 ? '(Mô phỏng) Bài có phần khó đánh giá.' : '',
     ...(b.mode === 'review' ? { reviewNote: '' } : {}),
-    _usage: { input: 6000, output: 2500, cost: (6000 * prices().input + 2500 * prices().output) / 1e6 },
+    _usage: { input: 6000, output: 2500, cost: (6000 * priceOf('gpt-6-luna').input + 2500 * priceOf('gpt-6-luna').output) / 1e6, model: 'mock' },
   };
 }
 
@@ -109,11 +109,13 @@ export async function POST(request) {
   }
   if (!Array.isArray(b.rubric) || !b.rubric.length) return json({ error: 'Thiếu tiêu chí chấm.' }, 400);
   try {
+    const route = b.mode === 'review' ? 'review' : b.mode === 'escalate' ? 'escalate' : 'grade';
+    if (route === 'escalate' && !modelFor('escalate')) return json({ skipped: true });
     if (provider() === 'mock') {
       await new Promise((r) => setTimeout(r, 300));
       return json(mockGrade(b));
     }
-    const result = await callModel({ system: SYSTEM, parts: buildParts(b), maxTokens: 4000, schema: gradeSchema(b.rubric), schemaName: 'ket_qua_cham' });
+    const result = await callModel({ route, system: SYSTEM, parts: buildParts(b), maxTokens: 4000, schema: gradeSchema(b.rubric), schemaName: 'ket_qua_cham' });
     return json(result);
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);

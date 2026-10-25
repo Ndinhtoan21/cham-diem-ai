@@ -106,6 +106,7 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
   try {
     const reviewed = await api<Raw>('grade', { ...base, mode: 'review', previous: first });
     usage = addUsage(usage, reviewed._usage);
+    delete reviewed._usage;
     final = normalize(reviewed, p.rubric, p.scoreStep, sub);
     const changed = p.rubric
       .map((c, i) => (firstNorm.scores[i].ai !== final.scores[i].ai ? `${c.name}: ${firstNorm.scores[i].ai} → ${final.scores[i].ai}` : ''))
@@ -113,6 +114,27 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
     if (changed.length) final.flags.push(`Khi tự rà soát AI đã sửa điểm (${changed.join('; ')}).`);
   } catch (e: any) {
     final.flags.push(`Lượt rà soát lại bị lỗi (${e.message}) — đang dùng kết quả chấm lần 1.`);
+  }
+  // Bài còn nghi vấn → nhờ mô hình mạnh hơn chấm lại (chỉ những bài này, để giữ chi phí thấp)
+  if (final.flags.length) {
+    onPhase('reviewing');
+    try {
+      const prev = final;
+      const esc = await api<Raw & { skipped?: boolean }>('grade', { ...base, mode: 'escalate', previous: { scores: prev.scores.map((x) => ({ criterionId: x.criterionId, score: x.ai, reason: x.reason, confidence: x.confidence })), errors: prev.errors, comment: prev.comment, flags: prev.flags } });
+      if (!esc.skipped) {
+        usage = addUsage(usage, esc._usage);
+        const model = esc._usage?.model;
+        delete esc._usage;
+        const escNorm = normalize(esc, p.rubric, p.scoreStep, sub);
+        const changed = p.rubric
+          .map((c, i) => (prev.scores[i].ai !== escNorm.scores[i].ai ? `${c.name}: ${prev.scores[i].ai} → ${escNorm.scores[i].ai}` : ''))
+          .filter(Boolean);
+        escNorm.flags.push(`Bài có cảnh báo nên đã được chấm lại bằng mô hình mạnh hơn${model ? ` (${model})` : ''}${changed.length ? `: ${changed.join('; ')}` : ', điểm giữ nguyên'}.`);
+        final = escNorm;
+      }
+    } catch (e: any) {
+      final.flags.push(`Chấm lại bằng mô hình mạnh hơn bị lỗi (${e.message}).`);
+    }
   }
   final.flags.push(...sub.warnings);
   return { status: 'done', ...final, checked: false, gradedAt: Date.now(), usage };
