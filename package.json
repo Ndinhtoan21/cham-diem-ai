@@ -1,0 +1,25 @@
+{
+  "name": "cham-diem-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && node dev-server.mjs",
+    "mock": "node build.mjs && AI_PROVIDER=mock node dev-server.mjs",
+    "start": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "docx": "^9.8.0",
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^6.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
