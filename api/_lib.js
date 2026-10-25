@@ -47,8 +47,8 @@ const PRICES = {
   'gemini-3.1-pro-preview': [2, 12],
   'deepseek-flash': [0.15, 0.6],
   'deepseek-v4-pro': [0.66, 1.98],
-  'claude-haiku-5-5': [1, 5],
-  'claude-sonnet-5-5': [3, 15],
+  'claude-haiku-5-5': [0.1, 0.5],
+  'claude-sonnet-5-5': [2, 10],
 };
 export function priceOf(model) {
   const env = process.env['PRICE_' + model.toUpperCase().replace(/[^A-Z0-9]/g, '_')];
