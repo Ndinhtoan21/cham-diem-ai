@@ -38,6 +38,7 @@ export type Result = {
   gradedAt?: number;
   noSubmission?: boolean;
   usage?: Usage;
+  supplementedAt?: number;
 };
 
 export type Usage = { input: number; output: number; cost: number; model?: string };

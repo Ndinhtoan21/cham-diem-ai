@@ -209,3 +209,8 @@ mark.err.active { background: var(--err); color: #fff; }
 .lesson-list { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 8px 0; }
 .lesson-list label { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; padding: 3px 0; }
 .lesson-list .rel { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+.chip.late { background: #e8eefc; color: #2c4fa8; margin-left: 6px; }
+.row-act { opacity: 0; transition: opacity .15s; }
+tr:hover .row-act, .row-act:focus-within { opacity: 1; }
+@media (hover: none) { .row-act { opacity: 1; } }

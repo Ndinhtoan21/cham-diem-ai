@@ -7,6 +7,7 @@ import { finalScore, findClassFor, postToBook } from '../lib/gradebook';
 import { listClasses, saveClass } from '../lib/store';
 import { TERM_LABEL, type ClassBook } from '../types';
 import Viewer from './Viewer';
+import { SupplementButton } from './Grading';
 
 type Filter = 'all' | 'unchecked' | 'flagged' | 'edited';
 
@@ -112,7 +113,11 @@ export default function Review({ p, update }: { p: Project; update: Updater }) {
                 return (
                   <tr key={s.id} className={r?.checked ? 'row-checked' : ''}>
                     <td>{s.stt}</td>
-                    <td className="left"><button className="link name" onClick={() => done && setOpen(s.id)}>{s.name}</button></td>
+                    <td className="left">
+                      <button className="link name" onClick={() => done && setOpen(s.id)}>{s.name}</button>
+                      {r?.supplementedAt && <span className="chip late" title={`Nộp bổ sung lúc ${new Date(r.supplementedAt).toLocaleString('vi-VN')}`}>bổ sung</span>}
+                      {' '}<span className="row-act"><SupplementButton p={p} update={update} student={s} label={r?.noSubmission ? '+ Nộp bài' : '+ Nộp bổ sung'} /></span>
+                    </td>
                     {p.rubric.map((c) => {
                       const sc = r?.scores.find((x) => x.criterionId === c.id);
                       return <ScoreCell key={c.id} sc={sc} max={c.max} onClick={() => done && setOpen(s.id)} />;

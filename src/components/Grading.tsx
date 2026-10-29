@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Updater as U } from '../App';
-import type { Project, Result, Student } from '../types';
+import type { Project, Result, Student, Submission } from '../types';
+import { buildSubmission } from '../lib/extract';
 import type { Updater } from '../App';
 import { classChecks, gradeOne, maxTotal, totalOf } from '../lib/grading';
 import { fmt, pool } from '../lib/util';
@@ -17,7 +18,8 @@ export function useGrader(p: Project, update: Updater) {
   const spentRef = useRef(0);
   const [budgetHit, setBudgetHit] = useState('');
 
-  async function run(list: Student[], extraNote?: string) {
+  async function run(list: Student[], extraNote?: string, opts: { project?: Project; flag?: string; mark?: Partial<Result> } = {}) {
+    const proj = opts.project || p;
     if (!list.length) return;
     stop.current = false;
     setBudgetHit('');
@@ -31,8 +33,8 @@ export function useGrader(p: Project, update: Updater) {
         return;
       }
       try {
-        const r = await gradeOne(p, s, (phase) => setResult(s.id, { status: phase }), extraNote);
-        setResult(s.id, r);
+        const r = await gradeOne(proj, s, (phase) => setResult(s.id, { status: phase }), extraNote);
+        setResult(s.id, { ...r, ...(opts.mark || {}), flags: opts.flag ? [opts.flag, ...r.flags] : r.flags });
         if (r.usage) {
           spentRef.current += r.usage.cost;
           const u = r.usage;
@@ -46,6 +48,83 @@ export function useGrader(p: Project, update: Updater) {
     setRunning(false);
   }
   return { running, run, stop: () => (stop.current = true), budgetHit };
+}
+
+/**
+ * Nộp bài bổ sung cho một học sinh (nộp muộn / làm thêm): đọc file mới, thay hoặc gộp với bài cũ,
+ * rồi chấm lại riêng em đó. Nếu điểm đã chốt thì mở khoá để thầy/cô duyệt và chốt lại.
+ */
+export function useSupplement(p: Project, update: Updater) {
+  const { run, running } = useGrader(p, update);
+  const [busy, setBusy] = useState('');
+  async function submit(st: Student, files: File[], mode: 'replace' | 'merge') {
+    if (!files.length) return;
+    setBusy(st.id);
+    try {
+      const fresh = await buildSubmission(files);
+      const old = p.submissions[st.id];
+      const sub = mode === 'merge' && old ? mergeSubmissions(old, fresh) : fresh;
+      const names = files.map((f) => f.name);
+      const fileMap = { ...p.fileMap, [st.id]: mode === 'merge' ? [...(p.fileMap[st.id] || []), ...names] : names };
+      const wasFinal = p.finalized;
+      update((x) => ({ submissions: { ...x.submissions, [st.id]: sub }, fileMap: { ...x.fileMap, [st.id]: fileMap[st.id] }, ...(wasFinal ? { finalized: false, finalizedAt: undefined } : {}) }));
+      const p2: Project = { ...p, submissions: { ...p.submissions, [st.id]: sub }, fileMap };
+      const when = new Date().toLocaleString('vi-VN');
+      await run([st], undefined, {
+        project: p2,
+        mark: { supplementedAt: Date.now(), checked: false, noSubmission: false },
+        flag: `Bài nộp bổ sung lúc ${when} (${!old || p.results[st.id]?.noSubmission ? 'nộp mới' : mode === 'merge' ? 'gộp với bài cũ' : 'thay bài cũ'}: ${names.join(', ')}).${wasFinal ? ' Điểm lớp đã được mở khoá — duyệt bài này rồi chốt lại để cập nhật sổ điểm.' : ''}`,
+      });
+    } finally { setBusy(''); }
+  }
+  return { submit, busy, running };
+}
+
+function mergeSubmissions(a: Submission, b: Submission): Submission {
+  return {
+    fileNames: [...a.fileNames, ...b.fileNames],
+    kinds: [...a.kinds, ...b.kinds],
+    text: [a.text, b.text].filter(Boolean).join('\n\n##### BÀI NỘP BỔ SUNG #####\n'),
+    analysis: [a.analysis, b.analysis].filter(Boolean).join('\n\n'),
+    html: a.html + '<div class="file-head">Bài nộp bổ sung</div>' + b.html,
+    images: [...a.images, ...b.images].slice(-6),
+    warnings: [...a.warnings, ...b.warnings],
+  };
+}
+
+/** Nút "Nộp bổ sung" dùng ở bảng duyệt điểm và màn hình xem bài. */
+export function SupplementButton({ p, update, student, label = 'Nộp bổ sung', className = 'link small' }: { p: Project; update: Updater; student: Student; label?: string; className?: string }) {
+  const { submit, busy, running } = useSupplement(p, update);
+  const [files, setFiles] = useState<File[] | null>(null);
+  const hasOld = !!p.submissions[student.id] && !p.results[student.id]?.noSubmission;
+  const inp = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button className={className} disabled={!!busy || running} title="Thêm hoặc thay file bài làm của học sinh này rồi chấm lại riêng bài này" onClick={(e) => { e.stopPropagation(); inp.current?.click(); }}>
+        {busy === student.id || running ? 'Đang chấm bổ sung…' : label}
+      </button>
+      <input ref={inp} hidden type="file" multiple onChange={(e) => {
+        const fs = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (!fs.length) return;
+        if (hasOld) setFiles(fs); else submit(student, fs, 'replace');
+      }} />
+      {files && (
+        <div className="modal-bg" onClick={() => setFiles(null)}>
+          <div className="card modal-sm" onClick={(e) => e.stopPropagation()}>
+            <h2>Nộp bổ sung — {student.name}</h2>
+            <p className="small">File mới: {files.map((f) => f.name).join(', ')}</p>
+            <p className="small muted">Bài cũ: {p.submissions[student.id]?.fileNames.join(', ')}</p>
+            <div className="row end">
+              <button className="btn" onClick={() => setFiles(null)}>Hủy</button>
+              <button className="btn" onClick={() => { const f = files; setFiles(null); submit(student, f, 'merge'); }} title="Bài mới là phần làm thêm — chấm cả bài cũ và bài mới">Gộp với bài cũ</button>
+              <button className="btn primary" onClick={() => { const f = files; setFiles(null); submit(student, f, 'replace'); }} title="Bài mới là bản hoàn chỉnh — bỏ bài cũ">Thay bài cũ</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default function Grading({ p, update }: { p: Project; update: Updater }) {
@@ -109,7 +188,7 @@ export default function Grading({ p, update }: { p: Project; update: Updater }) 
               const st = r?.status || 'idle';
               return (
                 <tr key={s.id}>
-                  <td>{s.stt}</td><td>{s.name}</td>
+                  <td>{s.stt}</td><td>{s.name}{(r?.noSubmission || st === 'error') && <> <SupplementButton p={p} update={update} student={s} label={r?.noSubmission ? '+ Nộp bài' : '+ Nộp lại file'} /></>}</td>
                   <td><span className={`chip st-${st}`}>{STATUS[st]}</span>{r?.errorMsg && <div className="small danger-text">{r.errorMsg}</div>}</td>
                   <td>{st === 'done' ? fmt(totalOf(r)) : ''}</td>
                   <td className="small">{r?.flags.length ? `⚠ ${r.flags.length}` : ''}</td>

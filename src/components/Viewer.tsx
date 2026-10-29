@@ -5,7 +5,7 @@ import { applyHighlights } from '../lib/highlight';
 import { effective, isEdited, maxTotal, totalOf } from '../lib/grading';
 import { fmt } from '../lib/util';
 import { finalScore } from '../lib/gradebook';
-import { useGrader } from './Grading';
+import { useGrader, SupplementButton } from './Grading';
 
 type Props = { p: Project; update: Updater; studentId: string; onClose: () => void; onNav: (d: number) => void; onConfirmNext: () => void };
 
@@ -79,6 +79,7 @@ export default function Viewer({ p, update, studentId, onClose, onNav, onConfirm
           <button className="btn" onClick={() => onNav(1)} title="Bài sau (→)">→</button>
           <span className="spacer" />
           {!locked && <button className="btn primary" onClick={onConfirmNext}>✓ Đã xem — bài tiếp chưa xem</button>}
+          <SupplementButton p={p} update={update} student={st} className="btn" label={r?.noSubmission ? 'Nộp bài cho em này' : 'Nộp bổ sung & chấm lại'} />
           <button className="btn" onClick={onClose}>Đóng</button>
         </header>
         <div className="viewer-body">
