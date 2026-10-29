@@ -84,14 +84,14 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <button className="brand" onClick={backHome} title="Danh sách bài chấm">
-          <span className="logo">✓</span> Chấm Điểm AI
+          <span className="logo">✓</span> Chấm Điểm
         </button>
         {p ? <span className="crumb">{p.name}{p.className ? ` · ${p.className}` : ''}</span> : (
           <nav className="views">{VIEWS.map(([v, l]) => <button key={v} className={`view ${view === v ? 'on' : ''}`} onClick={() => go(v)}>{l}</button>)}</nav>
         )}
         <span className="spacer" />
-        <span className={`badge ${server.error ? 'bad' : server.provider === 'mock' ? 'warn' : ''}`} title={server.error || ''}>
-          {server.error ? 'Không kết nối được máy chủ' : server.provider === 'mock' ? 'Chế độ mô phỏng (không gọi AI)' : server.provider === 'none' ? 'Chưa cấu hình API key' : server.provider ? `AI: ${server.model}` : '…'}
+        <span className={`badge ${server.error ? 'bad' : server.provider === 'mock' ? 'warn' : ''}`} title={server.error || (server.model ? `Mô hình: ${server.model}` : '')}>
+          {server.error ? 'Không kết nối được máy chủ' : server.provider === 'mock' ? 'Chế độ chạy thử' : server.provider === 'none' ? 'Chưa cấu hình API key' : server.provider ? 'Sẵn sàng' : '…'}
         </span>
       </header>
 
@@ -131,7 +131,7 @@ function Home({ projects, onOpen, onNew, onDelete, onRestored }: { projects: Pro
           <p className="muted">Mỗi bài chấm là một đề + một lớp. Dữ liệu chỉ lưu trong trình duyệt trên máy này.</p>
         </div>
         <div className="row">
-          <button className="btn" title="Lưu toàn bộ bài chấm và sổ điểm ra một file để chép sang máy khác" onClick={async () => download(await exportBackup(), `Sao luu Cham Diem AI ${new Date().toISOString().slice(0, 10)}.json`)}>Sao lưu</button>
+          <button className="btn" title="Lưu toàn bộ bài chấm và sổ điểm ra một file để chép sang máy khác" onClick={async () => download(await exportBackup(), `Sao luu Cham Diem ${new Date().toISOString().slice(0, 10)}.json`)}>Sao lưu</button>
           <label className="btn" title="Khôi phục từ file sao lưu">Khôi phục<input hidden type="file" accept=".json" onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
@@ -171,7 +171,7 @@ function PasswordGate({ onDone }: { onDone: () => void }) {
   return (
     <div className="gate">
       <form className="card" onSubmit={(e) => { e.preventDefault(); setSetting('password', v); onDone(); }}>
-        <h2>Chấm Điểm AI</h2>
+        <h2>Chấm Điểm</h2>
         <p className="muted">Nhập mật khẩu ứng dụng (APP_PASSWORD đã đặt trên Vercel).</p>
         <input type="password" autoFocus value={v} onChange={(e) => setV(e.target.value)} />
         <button className="btn primary">Vào</button>

@@ -68,10 +68,10 @@ export function priceOf(model) {
  *   MODEL_RUBRIC=openai:gpt-6-luna   (tách tiêu chí)
  */
 const DEFAULTS = {
-  openai: { grade: 'gpt-6-luna', review: 'gpt-6-luna', escalate: 'gpt-6.1-sol', rubric: 'gpt-6-luna' },
-  gemini: { grade: 'gemini-3.1-flash-lite', review: 'gemini-3.1-flash-lite', escalate: 'gemini-3.8-flash', rubric: 'gemini-3.1-flash-lite' },
-  deepseek: { grade: 'deepseek-flash', review: 'deepseek-flash', escalate: 'deepseek-v4-pro', rubric: 'deepseek-flash' },
-  anthropic: { grade: 'claude-haiku-5-5', review: 'claude-haiku-5-5', escalate: 'claude-sonnet-5-5', rubric: 'claude-haiku-5-5' },
+  openai: { grade: 'gpt-6-luna', review: 'gpt-6-luna', escalate: 'gpt-6.1-sol', rubric: 'gpt-6-luna', ocr: 'gpt-6-luna' },
+  gemini: { grade: 'gemini-3.1-flash-lite', review: 'gemini-3.1-flash-lite', escalate: 'gemini-3.8-flash', rubric: 'gemini-3.1-flash-lite', ocr: 'gemini-3.1-flash-lite' },
+  deepseek: { grade: 'deepseek-flash', review: 'deepseek-flash', escalate: 'deepseek-v4-pro', rubric: 'deepseek-flash', ocr: 'deepseek-flash' },
+  anthropic: { grade: 'claude-haiku-5-5', review: 'claude-haiku-5-5', escalate: 'claude-sonnet-5-5', rubric: 'claude-haiku-5-5', ocr: 'claude-haiku-5-5' },
 };
 export function modelFor(route) {
   const env = process.env['MODEL_' + route.toUpperCase()];
@@ -87,7 +87,7 @@ export function modelFor(route) {
   if (p === 'anthropic' && process.env.ANTHROPIC_MODEL && route !== 'escalate') return { provider: p, model: process.env.ANTHROPIC_MODEL };
   return { provider: p, model: env || DEFAULTS[p]?.[route] || DEFAULTS[p]?.grade };
 }
-export const ROUTES = ['grade', 'review', 'escalate', 'rubric'];
+export const ROUTES = ['grade', 'review', 'escalate', 'rubric', 'ocr'];
 
 function parseDataUrl(url) {
   const m = /^data:([^;]+);base64,(.*)$/s.exec(url || '');
@@ -96,17 +96,17 @@ function parseDataUrl(url) {
 
 /** Pull the first JSON object out of a model reply. */
 export function extractJson(text) {
-  if (!text) throw new Error('AI không trả về nội dung.');
+  if (!text) throw new Error('Không nhận được kết quả chấm.');
   const cleaned = text.replace(/^```(?:json)?/m, '').replace(/```\s*$/m, '');
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('AI trả về sai định dạng JSON.');
+  if (start < 0 || end < start) throw new Error('Kết quả chấm sai định dạng.');
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
 /** Giới hạn cứng phía máy chủ cho mỗi lần gọi (ràng buộc chi phí). */
 export const LIMITS = {
-  maxOutputTokens: Number(process.env.MAX_OUTPUT_TOKENS || 8000),
+  maxOutputTokens: Number(process.env.MAX_OUTPUT_TOKENS || 12000),
   maxImages: Number(process.env.MAX_IMAGES || 6),
   maxInputChars: Number(process.env.MAX_INPUT_CHARS || 60000),
 };
@@ -184,7 +184,7 @@ export async function callModel({ route = 'grade', system, parts, maxTokens = 40
     }
     const choice = data.choices?.[0];
     if (choice?.finish_reason === 'length') throw new Error(`${model} dùng hết giới hạn token trước khi trả lời xong. Thử lại, hoặc tăng MAX_OUTPUT_TOKENS.`);
-    if (choice?.message?.refusal) throw new Error('AI từ chối chấm bài này: ' + choice.message.refusal);
+    if (choice?.message?.refusal) throw new Error('Không chấm được bài này: ' + choice.message.refusal);
     const u = data.usage || {};
     return attachUsage(extractJson(choice?.message?.content), { input: u.prompt_tokens || 0, output: u.completion_tokens || 0 }, model);
   }
@@ -215,5 +215,5 @@ export async function callModel({ route = 'grade', system, parts, maxTokens = 40
   }
 
   if (p === 'mock') return null; // handled by callers
-  throw new Error('Chưa cấu hình AI: đặt OPENAI_API_KEY (hoặc GEMINI_API_KEY / DEEPSEEK_API_KEY) trong Environment Variables của Vercel.');
+  throw new Error('Chưa cấu hình mô hình chấm: đặt OPENAI_API_KEY (hoặc GEMINI_API_KEY / DEEPSEEK_API_KEY) trong Environment Variables của Vercel.');
 }

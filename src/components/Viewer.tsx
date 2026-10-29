@@ -90,7 +90,7 @@ export default function Viewer({ p, update, studentId, onClose, onNav, onConfirm
           </div>
           <aside className="grade-pane">
             {r.flags.length > 0 && <ul className="note warn small">{r.flags.map((f, i) => <li key={i}>{f}</li>)}</ul>}
-            {r.reviewNote && <p className="note small">AI rà soát: {r.reviewNote}</p>}
+            {r.reviewNote && <p className="note small">Rà soát: {r.reviewNote}</p>}
             {p.rubric.map((c, ci) => {
               const s = r.scores.find((x) => x.criterionId === c.id)!;
               const errs = r.errors.map((e, i) => ({ e, i })).filter(({ e }) => e.criterionId === c.id);
@@ -100,10 +100,10 @@ export default function Viewer({ p, update, studentId, onClose, onNav, onConfirm
                   <div className="crit-head">
                     <div><b>TC{ci + 1}. {c.name}</b><div className="muted small">Tối đa {fmt(c.max)}đ</div></div>
                     <div className="crit-score">
-                      <span className="muted small">AI: {fmt(s?.ai)}</span>
+                      <span className="muted small">Máy chấm: {fmt(s?.ai)}</span>
                       <input type="number" className={ed ? 'edited' : ''} min={0} max={c.max} step={p.scoreStep} disabled={locked}
                         value={s?.teacher ?? s?.ai ?? ''} onChange={(e) => setScore(c.id, e.target.value)} />
-                      {ed && !locked && <button className="link small" onClick={() => setScore(c.id, '')}>về điểm AI</button>}
+                      {ed && !locked && <button className="link small" onClick={() => setScore(c.id, '')}>về điểm ban đầu</button>}
                     </div>
                   </div>
                   {s?.reason && <p className="small">{s.reason}{s.confidence && <span className="muted"> · độ chắc chắn: {s.confidence}</span>}</p>}
@@ -111,7 +111,7 @@ export default function Viewer({ p, update, studentId, onClose, onNav, onConfirm
                     <div key={i} id={`err-${i}`} className={`err-item ${active === i ? 'active' : ''}`} onClick={() => focusError(i)}>
                       {e.quote ? <q className={located.has(i) ? '' : 'nf'}>{e.quote}</q> : <span className="muted small">(lỗi không gắn với một đoạn cụ thể)</span>}
                       <div className="small">{e.note}</div>
-                      {e.quote && !located.has(i) && <div className="small warn-text">Không tìm thấy đoạn này trong bài — có thể AI trích sai.</div>}
+                      {e.quote && !located.has(i) && <div className="small warn-text">Không tìm thấy đoạn này trong bài — có thể trích sai.</div>}
                       {!locked && <button className="link small danger" onClick={(ev) => { ev.stopPropagation(); removeError(i); }}>Bỏ lỗi này</button>}
                     </div>
                   ))}
@@ -124,7 +124,7 @@ export default function Viewer({ p, update, studentId, onClose, onNav, onConfirm
             </label>
             {!locked && (
               <details className="regrade">
-                <summary>Nhờ AI chấm lại bài này</summary>
+                <summary>Chấm lại bài này</summary>
                 <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Bài này HS chèn ảnh đúng nhưng ảnh nằm trong bảng, đừng trừ điểm tiêu chí chèn ảnh." />
                 <button className="btn" disabled={running} onClick={() => confirm('Chấm lại sẽ thay điểm hiện tại của bài này. Tiếp tục?') && run([st], note)}>{running ? 'Đang chấm…' : 'Chấm lại'}</button>
               </details>

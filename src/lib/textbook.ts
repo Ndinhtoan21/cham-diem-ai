@@ -1,4 +1,6 @@
-import { readTeacherFile } from './extract';
+import { openPdf, pageText, readTeacherFile, renderPage, textQuality } from './extract';
+import { api } from './api';
+import { pool } from './util';
 import { normWords, uid } from './util';
 
 /**
@@ -60,16 +62,65 @@ export function splitLessons(text: string): Lesson[] {
   }).filter((l) => l.text.length > 80);
 }
 
-export async function readTextbookFiles(files: File[], grade: string, subject = 'Tin học'): Promise<{ book: Textbook; warnings: string[] }> {
+export type Progress = (msg: string) => void;
+
+/**
+ * Đọc SGK dạng PDF theo từng trang. Trang có chữ tốt thì lấy chữ; trang scan hoặc lỗi phông
+ * (thường gặp với PDF tiếng Việt) thì chụp lại thành ảnh và nhờ mô hình chép chữ (rẻ, ~vài xu cả cuốn).
+ */
+async function readPdfBook(file: File, onProgress: Progress, warnings: string[]): Promise<{ text: string; ocrPages: number; cost: number }> {
+  const pdf = await openPdf(await file.arrayBuffer());
+  const n = pdf.numPages;
+  const texts: string[] = new Array(n).fill('');
+  const need: number[] = [];
+  for (let i = 1; i <= n; i++) {
+    const t = await pageText(await pdf.getPage(i));
+    if (textQuality(t, true) === 'good') texts[i - 1] = t;
+    else need.push(i);
+    if (i % 10 === 0) onProgress(`Đang đọc chữ ${file.name}: trang ${i}/${n}…`);
+  }
+  let cost = 0, done = 0, failed = 0;
+  if (need.length) {
+    onProgress(`${need.length}/${n} trang không có chữ đọc được (bản scan / lỗi phông) — đang chép chữ từ ảnh…`);
+    const batches: number[][] = [];
+    for (let i = 0; i < need.length; i += 3) batches.push(need.slice(i, i + 3));
+    await pool(batches, 3, async (pages) => {
+      try {
+        const images: string[] = [];
+        for (const pg of pages) { const u = await renderPage(await pdf.getPage(pg), 1300, 0.72); if (u) images.push(u); }
+        const r = await api<{ pages: { page: number; text: string }[]; _usage?: { cost: number } }>('ocr', { images, pages });
+        cost += r._usage?.cost || 0;
+        (r.pages || []).forEach((x, k) => { const pg = pages.includes(Number(x.page)) ? Number(x.page) : pages[k]; if (pg) texts[pg - 1] = x.text || ''; });
+      } catch (e: any) {
+        failed += pages.length;
+        if (failed === pages.length) warnings.push(`Lỗi khi chép chữ từ ảnh: ${e.message}`);
+      }
+      done += pages.length;
+      onProgress(`Đang chép chữ từ ảnh: ${done}/${need.length} trang…`);
+    });
+    if (failed) warnings.push(`${failed} trang chưa chép được chữ — có thể tải lại SGK để thử lại.`);
+  }
+  return { text: texts.map((t, i) => `--- Trang ${i + 1} ---\n${t}`).join('\n'), ocrPages: need.length - failed, cost };
+}
+
+export async function readTextbookFiles(files: File[], grade: string, subject = 'Tin học', onProgress: Progress = () => {}): Promise<{ book: Textbook; warnings: string[] }> {
   const warnings: string[] = [];
   let all = '';
   for (const f of files) {
-    const r = await readTeacherFile(f);
-    if (!r.text.trim()) warnings.push(`Không đọc được chữ trong ${f.name} — có thể là bản scan (ảnh). Hãy dùng file PDF có chữ chọn được, hoặc file Word.`);
-    all += (all ? '\n' : '') + r.text;
+    if (/\.pdf$/i.test(f.name)) {
+      const r = await readPdfBook(f, onProgress, warnings);
+      if (r.ocrPages) warnings.unshift(`${f.name}: ${r.ocrPages} trang được chép chữ từ ảnh${r.cost ? ` (chi phí ~$${r.cost.toFixed(3)})` : ''}.`);
+      all += (all ? '\n' : '') + r.text;
+    } else {
+      onProgress(`Đang đọc ${f.name}…`);
+      const r = await readTeacherFile(f);
+      if (!r.text.trim()) warnings.push(`Không đọc được chữ trong ${f.name}.`);
+      all += (all ? '\n' : '') + r.text;
+    }
   }
   const lessons = splitLessons(all);
   if (all.trim() && lessons.length && !/^Bài/.test(lessons[0].title)) warnings.push('Không nhận ra tiêu đề “Bài 1, Bài 2…” trong sách — đã chia theo đoạn. Vẫn dùng được nhưng chọn bài sẽ kém chính xác hơn.');
+  if (!lessons.length) warnings.push('Không lấy được nội dung nào từ file SGK.');
   return {
     book: { id: uid(), grade, subject, name: `${subject} ${grade}`, fileNames: files.map((f) => f.name), lessons, chars: all.length, createdAt: Date.now() },
     warnings,

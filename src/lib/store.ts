@@ -62,7 +62,7 @@ export async function exportBackup(): Promise<Blob> {
 }
 export async function importBackup(file: File): Promise<{ projects: number; classes: number }> {
   const data = JSON.parse(await file.text());
-  if (data.app !== 'cham-diem-ai') throw new Error('Không phải file sao lưu của Chấm Điểm AI.');
+  if (data.app !== 'cham-diem-ai') throw new Error('Không phải file sao lưu của Chấm Điểm.');
   for (const p of data.projects || []) await tx('readwrite', (s) => s.put(p, p.id));
   for (const c of data.classes || []) await tx('readwrite', (s) => s.put(c, c.id), CLASSES);
   for (const b of data.textbooks || []) await saveTextbook(b);

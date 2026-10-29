@@ -17,6 +17,7 @@ export default function NewProjectDialog({ onCancel, onCreate }: { onCancel: () 
   const [classes, setClasses] = useState<ClassBook[]>([]);
   const [books, setBooks] = useState<Textbook[]>([]);
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState('');
   const [msg, setMsg] = useState<string[]>([]);
   useEffect(() => { listClasses().then(setClasses); listTextbooks().then(setBooks); }, []);
 
@@ -28,7 +29,7 @@ export default function NewProjectDialog({ onCancel, onCreate }: { onCancel: () 
     if (!files?.length || !grade) return;
     setBusy(true); setMsg([]);
     try {
-      const r = await readTextbookFiles(Array.from(files), grade, subject);
+      const r = await readTextbookFiles(Array.from(files), grade, subject, (m) => setProg(m));
       if (book) r.book.id = book.id; // thay sách cũ của khối
       await saveTextbook(r.book);
       setBooks(await listTextbooks());
@@ -85,13 +86,14 @@ export default function NewProjectDialog({ onCancel, onCreate }: { onCancel: () 
           <section className={`sgk-box ${book ? 'ok' : ''}`}>
             <h3 style={{ marginTop: 0 }}>SGK {subject} {grade}</h3>
             {book ? (
-              <p className="small">✓ Đã có: {book.fileNames.join(', ')} · {book.lessons.length} bài. Khi chấm, app tự chọn các bài liên quan tới đề để AI đối chiếu.</p>
+              <p className="small">✓ Đã có: {book.fileNames.join(', ')} · {book.lessons.length} bài. Khi chấm, app tự chọn các bài liên quan tới đề để đối chiếu.</p>
             ) : (
-              <p className="small">Chưa có SGK của khối {grade}. Tải file sách (PDF có chữ chọn được, hoặc Word) để AI hiểu nội dung đã dạy và chấm sát với chuẩn của lớp. Chỉ cần tải một lần cho cả khối.</p>
+              <p className="small">Chưa có SGK của khối {grade}. Tải file sách PDF (kể cả bản scan) hoặc Word để hệ thống hiểu nội dung đã dạy và chấm sát với chuẩn của lớp. Chỉ cần tải một lần cho cả khối.</p>
             )}
             <label className="btn">{busy ? 'Đang đọc sách…' : book ? 'Thay file SGK' : `Tải SGK ${subject} ${grade}`}
               <input hidden type="file" multiple disabled={busy} accept=".pdf,.docx,.txt" onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
             </label>
+            {busy && prog && <p className="small muted">{prog}</p>}
             {msg.length > 0 && <ul className="small">{msg.map((m, i) => <li key={i} className={i ? 'warn-text' : ''}>{m}</li>)}</ul>}
           </section>
         )}

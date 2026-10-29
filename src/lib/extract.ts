@@ -5,6 +5,7 @@ import { escapeHtml } from './util';
 import type { FileKind, Submission } from '../types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+export { pdfjs };
 
 const TEXT_EXT = ['txt', 'py', 'c', 'cpp', 'h', 'java', 'js', 'ts', 'html', 'htm', 'css', 'pas', 'pp', 'sql', 'md', 'json', 'csv', 'xml', 'sb', 'vb', 'cs'];
 const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic'];
@@ -26,42 +27,78 @@ export const isJunkFile = (path: string) => {
   return base.startsWith('.') || base.startsWith('~$') || base === 'Thumbs.db' || base === 'desktop.ini';
 };
 
+// pdf.js cần bảng mã chữ (cmaps), phông chuẩn và bộ giải mã ảnh (wasm) để đọc đúng PDF tiếng Việt và PDF scan
+const PDF_OPTS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', iccUrl: '/pdfjs/iccs/' };
+export const openPdf = (buf: ArrayBuffer) => pdfjs.getDocument({ data: new Uint8Array(buf), ...PDF_OPTS } as any).promise;
+
+export async function pageText(page: any): Promise<string> {
+  const tc = await page.getTextContent();
+  let s = '';
+  for (const it of tc.items as any[]) s += it.str + (it.hasEOL ? '\n' : ' ');
+  return s.replace(/[ \t]+\n/g, '\n').trim();
+}
+
+const VI = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/gi;
+/** Chữ trích ra có dùng được không: rỗng (bản scan), lỗi phông (ký tự rác) hay tốt. */
+export function textQuality(t: string, vietnamese = false): 'good' | 'empty' | 'garbled' {
+  const s = t.replace(/\s/g, '');
+  if (s.length < 25) return 'empty';
+  const ok = (s.match(/[\p{L}\p{N}.,;:!?()[\]{}\-–—"'“”‘’%/+=*<>_#&@…·•]/gu) || []).length;
+  if (s.includes('\uFFFD') || ok / s.length < 0.85) return 'garbled';
+  if (vietnamese && s.length > 150 && (t.match(VI) || []).length / s.length < 0.03) return 'garbled';
+  return 'good';
+}
+
+const IMG_OPS = () => new Set([(pdfjs as any).OPS.paintImageXObject, (pdfjs as any).OPS.paintInlineImageXObject, (pdfjs as any).OPS.paintImageXObjectRepeat].filter((x) => x != null));
+export async function pageImageCount(page: any): Promise<number> {
+  try {
+    const ops = await page.getOperatorList();
+    const set = IMG_OPS();
+    return ops.fnArray.filter((f: number) => set.has(f)).length;
+  } catch { return 0; }
+}
+
+export async function renderPage(page: any, maxW = 1400, quality = 0.8): Promise<string | null> {
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(2.2, maxW / base.width);
+  const vp = page.getViewport({ scale });
+  const c = document.createElement('canvas');
+  c.width = Math.round(vp.width);
+  c.height = Math.round(vp.height);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvas: c, canvasContext: ctx, viewport: vp } as any).promise;
+  const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/jpeg', quality));
+  return downscale(blob, maxW, quality);
+}
+
+const MAX_PDF_IMAGES = 6;
+
+/** Bài làm PDF: lấy chữ, và chụp lại các trang có hình / trang scan để hệ thống "nhìn" được. */
 async function extractPdf(buf: ArrayBuffer): Promise<Extracted> {
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
-  const pages: string[] = [];
+  const pdf = await openPdf(buf);
+  const info: { text: string; q: ReturnType<typeof textQuality>; imgs: number }[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
-    const tc = await page.getTextContent();
-    let s = '';
-    for (const it of tc.items as any[]) s += it.str + (it.hasEOL ? '\n' : ' ');
-    pages.push(s.trim());
+    const text = await pageText(page);
+    info.push({ text, q: textQuality(text), imgs: await pageImageCount(page) });
   }
-  const text = pages.map((p, i) => `--- Trang ${i + 1} ---\n${p}`).join('\n');
-  const totalChars = pages.join('').replace(/\s/g, '').length;
-  const images: string[] = [];
+  // ưu tiên trang không có chữ đọc được, rồi tới trang có hình
+  const need = info.map((x, i) => ({ i, pri: x.q !== 'good' ? 0 : x.imgs ? 1 : 9 })).filter((x) => x.pri < 9).sort((a, b) => a.pri - b.pri || a.i - b.i);
+  const rendered = new Map<number, string>();
+  for (const { i } of need.slice(0, MAX_PDF_IMAGES)) {
+    const url = await renderPage(await pdf.getPage(i + 1), 1400, 0.8);
+    if (url) rendered.set(i, url);
+  }
   const warnings: string[] = [];
-  let html = pages.map((p, i) => `<section class="slide"><div class="slide-no">Trang ${i + 1}</div><p class="pre">${escapeHtml(p)}</p></section>`).join('');
-  if (totalChars < 40 * pdf.numPages) {
-    // Probably a scan: render pages as images so the AI can read them.
-    warnings.push('PDF gần như không có chữ (có thể là bản scan) — AI sẽ đọc qua hình ảnh, cần kiểm tra kĩ hơn.');
-    html = '';
-    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({ scale: 1.6 });
-      const c = document.createElement('canvas');
-      c.width = vp.width;
-      c.height = vp.height;
-      await page.render({ canvas: c, canvasContext: c.getContext('2d')!, viewport: vp } as any).promise;
-      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.85));
-      const url = await downscale(blob, 1600);
-      if (url) {
-        images.push(url);
-        html += `<img class="doc-img" src="${url}" alt="Trang ${i}">`;
-      }
-    }
-    if (pdf.numPages > 5) warnings.push(`PDF có ${pdf.numPages} trang, chỉ gửi 5 trang đầu cho AI.`);
-  }
-  return { text: totalChars < 40 * pdf.numPages ? '' : text, analysis: `PDF ${pdf.numPages} trang.`, html, images, warnings };
+  const bad = info.filter((x) => x.q !== 'good').length;
+  if (bad) warnings.push(`${bad}/${pdf.numPages} trang PDF không có chữ đọc được (bản scan hoặc lỗi phông) — đọc qua hình, cần kiểm tra kĩ hơn.`);
+  if (need.length > MAX_PDF_IMAGES) warnings.push(`PDF có ${need.length} trang cần đọc qua hình, chỉ chụp ${MAX_PDF_IMAGES} trang đầu (trang ${need.slice(MAX_PDF_IMAGES).map((x) => x.i + 1).join(', ')} chưa được xem).`);
+  const text = info.map((x, i) => (x.q === 'good' ? `--- Trang ${i + 1} ---\n${x.text}` : `--- Trang ${i + 1} --- (xem hình${rendered.has(i) ? ` trang ${i + 1}` : ' — chưa chụp'})`)).join('\n');
+  const html = info.map((x, i) => `<section class="slide"><div class="slide-no">Trang ${i + 1}${x.imgs ? ` · ${x.imgs} hình` : ''}</div>${x.q === 'good' ? `<p class="pre">${escapeHtml(x.text)}</p>` : ''}${rendered.has(i) ? `<img class="doc-img" src="${rendered.get(i)}" alt="Trang ${i + 1}">` : ''}</section>`).join('');
+  const analysis = `PDF ${pdf.numPages} trang.` + (rendered.size ? ` Đã chụp hình các trang: ${[...rendered.keys()].map((i) => i + 1).join(', ')} (gửi kèm dưới dạng hình theo thứ tự này).` : '') + (info.some((x) => x.imgs) ? ` Trang có hình ảnh: ${info.map((x, i) => (x.imgs ? `${i + 1} (${x.imgs} hình)` : '')).filter(Boolean).join(', ')}.` : '');
+  return { text: info.some((x) => x.q === 'good') ? text : '', analysis, html, images: [...rendered.values()], warnings };
 }
 
 async function extractOne(file: File): Promise<Extracted> {

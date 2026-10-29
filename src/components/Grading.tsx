@@ -88,7 +88,7 @@ export default function Grading({ p, update }: { p: Project; update: Updater }) 
         <div className="progress"><div style={{ width: pct + '%' }} /></div>
         <CostBar p={p} update={update} pending={pending.length} />
         {budgetHit && <p className="danger-text">{budgetHit}</p>}
-        <p className="muted small">Mỗi bài được chấm 2 lượt: chấm theo tiêu chí, rồi AI tự rà soát lại; sau đó hệ thống kiểm tra tự động (điểm vượt tối đa, trích dẫn lỗi có thật trong bài không, trừ điểm có lý do không…).</p>
+        <p className="muted small">Mỗi bài được chấm 2 lượt: chấm theo tiêu chí, rồi tự rà soát lại; sau đó hệ thống kiểm tra tự động (điểm vượt tối đa, trích dẫn lỗi có thật trong bài không, trừ điểm có lý do không…).</p>
       </section>
 
       {!running && done.length > 0 && (
@@ -132,7 +132,7 @@ function CostBar({ p, update, pending }: { p: Project; update: U; pending: numbe
   const per = s && s.calls ? s.cost / s.calls : 0;
   return (
     <div className="costbar small">
-      <span>Chi phí AI: <b>{usd(s?.cost || 0)}</b>{s?.calls ? ` cho ${s.calls} bài (TB ${usd(per)}/bài, ${Math.round(s.input / s.calls / 1000)}k token vào · ${Math.round(s.output / s.calls / 1000)}k token ra)` : ''}</span>
+      <span>Chi phí: <b>{usd(s?.cost || 0)}</b>{s?.calls ? ` cho ${s.calls} bài (TB ${usd(per)}/bài, ${Math.round(s.input / s.calls / 1000)}k token vào · ${Math.round(s.output / s.calls / 1000)}k token ra)` : ''}</span>
       {per > 0 && pending > 0 && <span className="muted">Ước tính {pending} bài còn lại: ~{usd(per * pending)}</span>}
       <label className="inline small">Hạn mức cho bài chấm này ($)
         <input type="number" min={0} step={1} style={{ width: 80 }} value={budget}

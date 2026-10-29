@@ -63,7 +63,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
     try {
       const r = await readTeacherFile(f);
       setRubricText(r.text);
-      say('rubric', `Đã đọc ${f.name}. Bấm “AI tách tiêu chí” để chuyển thành bảng.`);
+      say('rubric', `Đã đọc ${f.name}. Bấm “Tự tách tiêu chí” để chuyển thành bảng.`);
     } catch (e: any) { say('rubric', 'Lỗi: ' + e.message); }
     setBusy('');
   }
@@ -76,7 +76,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
       const crit = (r.criteria || []).map((c) => ({ id: uid(), name: c.name, max: Number(c.max) || 0, desc: c.desc || '' }));
       update({ rubric: crit });
       setRubricNote(r.notes || '');
-      say('rubric', `AI tách được ${crit.length} tiêu chí. Kiểm tra lại bảng bên dưới.`);
+      say('rubric', `Đã tách được ${crit.length} tiêu chí. Kiểm tra lại bảng bên dưới.`);
     } catch (e: any) { say('rubric', 'Lỗi: ' + e.message); }
     setBusy('');
   }
@@ -166,13 +166,13 @@ export default function Setup({ p, update, files, setFiles }: Props) {
         <h2>3. Tiêu chí chấm</h2>
         <div className="row">
           <label className="btn">Chọn file tiêu chí<input hidden type="file" accept=".docx,.pdf,.xlsx,.txt" onChange={(e) => e.target.files?.[0] && onRubricFile(e.target.files[0])} /></label>
-          <button className="btn" disabled={busy === 'rubric'} onClick={aiParseRubric}>AI tách tiêu chí</button>
+          <button className="btn" disabled={busy === 'rubric'} onClick={aiParseRubric}>Tự tách tiêu chí</button>
           <button className="btn" onClick={pasteRubric} title="Dán từ Excel: Tiêu chí | Điểm | Mô tả">Nhận bảng dán từ Excel</button>
           {busy === 'rubric' && <span className="muted">Đang xử lý…</span>}
         </div>
         {msg.rubric && <p className="muted small">{msg.rubric}</p>}
         <textarea rows={4} value={rubricText} onChange={(e) => setRubricText(e.target.value)} placeholder="Nội dung file tiêu chí sẽ hiện ở đây — hoặc dán bảng từ Excel (Tiêu chí | Điểm | Mô tả) rồi bấm “Nhận bảng dán từ Excel”" />
-        {rubricNote && <div className="note warn">AI lưu ý: {rubricNote}</div>}
+        {rubricNote && <div className="note warn">Lưu ý: {rubricNote}</div>}
         <table className="tbl rubric">
           <thead><tr><th>#</th><th>Tiêu chí</th><th style={{ width: 90 }}>Điểm tối đa</th><th>Mô tả / cách chấm</th><th /></tr></thead>
           <tbody>
@@ -195,7 +195,7 @@ export default function Setup({ p, update, files, setFiles }: Props) {
 
       <section className="card">
         <h2>5. Yêu cầu chấm của bạn</h2>
-        <p className="muted small">Mô tả cách bạn muốn chấm. AI sẽ ưu tiên những yêu cầu này hơn tiêu chí chung.</p>
+        <p className="muted small">Mô tả cách bạn muốn chấm. Hệ thống sẽ ưu tiên những yêu cầu này hơn tiêu chí chung.</p>
         <textarea rows={5} value={p.instructions} onChange={(e) => update({ instructions: e.target.value })}
           placeholder={'VD:\n- Sai chính tả: trừ 0,25 mỗi lỗi, tối đa trừ 1 điểm ở tiêu chí nội dung.\n- Tiêu đề phải căn giữa, chữ đậm, cỡ 16 trở lên; thiếu một yêu cầu trừ 0,25.\n- Không trừ điểm phông chữ nếu HS dùng Arial thay Times New Roman.\n- Học sinh lớp 6, chấm nhẹ tay phần trình bày.'} />
         <div className="row">
@@ -270,6 +270,7 @@ function TextbookSection({ p, update }: { p: Project; update: Updater }) {
   const [lib, setLib] = useState<Lesson[]>(loadLib);
   const [books, setBooks] = useState<Textbook[]>([]);
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState('');
   const [msg, setMsg] = useState('');
   const [showAll, setShowAll] = useState(false);
   useEffect(() => { listTextbooks().then(setBooks); }, []);
@@ -299,7 +300,7 @@ function TextbookSection({ p, update }: { p: Project; update: Updater }) {
     if (!files?.length || !grade) return;
     setBusy(true);
     try {
-      const r = await readTextbookFiles(Array.from(files), grade, subject);
+      const r = await readTextbookFiles(Array.from(files), grade, subject, (m) => setProg(m));
       if (book) r.book.id = book.id;
       await saveTextbook(r.book);
       setBooks(await listTextbooks());
@@ -323,7 +324,7 @@ function TextbookSection({ p, update }: { p: Project; update: Updater }) {
   return (
     <section className="card">
       <h2>4. Phạm vi kiến thức</h2>
-      <p className="muted small">AI chấm theo chuẩn kiến thức của SGK và lứa tuổi này: trả lời đúng ý như SGK (kể cả diễn đạt đơn giản) là đủ điểm; không trừ điểm vì thiếu kiến thức chuyên sâu ngoài sách.</p>
+      <p className="muted small">Bài được chấm theo chuẩn kiến thức của SGK và lứa tuổi này: trả lời đúng ý như SGK (kể cả diễn đạt đơn giản) là đủ điểm; không trừ điểm vì thiếu kiến thức chuyên sâu ngoài sách.</p>
       <div className="grid2">
         <label>Lớp / môn / bộ sách
           <input value={p.curriculum ?? DEFAULT_CURRICULUM} onChange={(e) => update({ curriculum: e.target.value })} />
@@ -351,9 +352,10 @@ function TextbookSection({ p, update }: { p: Project; update: Updater }) {
               ))}
               {!showAll && ranked.length > shown.length && <button className="link small" onClick={() => setShowAll(true)}>Xem tất cả {ranked.length} bài</button>}
             </div>
-            <p className="small muted">Gửi cho AI: {picked.length ? `${p.sgkTitles?.join('; ')} (${sgkLen.toLocaleString('vi-VN')} ký tự)` : 'chưa chọn bài nào'}.</p>
+            <p className="small muted">Dùng làm chuẩn: {picked.length ? `${p.sgkTitles?.join('; ')} (${sgkLen.toLocaleString('vi-VN')} ký tự)` : 'chưa chọn bài nào'}.</p>
           </>
         )}
+        {busy && prog && <p className="small muted">{prog}</p>}
         {msg && <p className="small">{msg}</p>}
       </div>
 

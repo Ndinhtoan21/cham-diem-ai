@@ -93,7 +93,7 @@ export default function Review({ p, update }: { p: Project; update: Updater }) {
           </div>
         </div>
         <div className="legend small">
-          <span><i className="sw ai" /> Điểm AI chấm</span><span><i className="sw edited" /> Điểm bạn đã sửa</span><span><i className="sw flag" /> Có cảnh báo</span>
+          <span><i className="sw ai" /> Điểm hệ thống chấm</span><span><i className="sw edited" /> Điểm bạn đã sửa</span><span><i className="sw flag" /> Có cảnh báo</span>
         </div>
         <div className="tbl-wrap">
           <table className="tbl scores">
@@ -168,7 +168,7 @@ function ScoreCell({ sc, max, onClick }: { sc?: Score; max: number; onClick: () 
   const ed = isEdited(sc);
   const v = effective(sc);
   return (
-    <td className={`sc ${ed ? 'edited' : 'ai'} ${v < max ? 'lost' : ''}`} onClick={onClick} title={ed ? `AI chấm ${fmt(sc.ai)} · bạn sửa thành ${fmt(sc.teacher)}` : sc.reason}>
+    <td className={`sc ${ed ? 'edited' : 'ai'} ${v < max ? 'lost' : ''}`} onClick={onClick} title={ed ? `Hệ thống chấm ${fmt(sc.ai)} · bạn sửa thành ${fmt(sc.teacher)}` : sc.reason}>
       {fmt(v)}{ed && <s className="ai-old">{fmt(sc.ai)}</s>}
     </td>
   );

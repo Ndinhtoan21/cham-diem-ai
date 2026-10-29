@@ -33,8 +33,8 @@ export function normalize(raw: Raw, rubric: Criterion[], step: number, sub: Subm
   const scores: Score[] = rubric.map((c, i) => {
     const r = byId.get(c.id) || byName.get(normKey(c.name)) || (raw.scores || [])[i];
     if (!r) {
-      flags.push(`AI chưa chấm tiêu chí "${c.name}" — tạm để 0.`);
-      return { criterionId: c.id, ai: 0, reason: 'AI không trả điểm cho tiêu chí này.', confidence: 'thấp' };
+      flags.push(`Chưa chấm được tiêu chí "${c.name}" — tạm để 0.`);
+      return { criterionId: c.id, ai: 0, reason: 'Chưa có điểm cho tiêu chí này.', confidence: 'thấp' };
     }
     let v = Number(r.score);
     if (Number.isNaN(v)) v = 0;
@@ -54,9 +54,9 @@ export function normalize(raw: Raw, rubric: Criterion[], step: number, sub: Subm
   scores.forEach((s) => {
     const c = rubric.find((x) => x.id === s.criterionId)!;
     if (s.ai < c.max && !errors.some((e) => e.criterionId === s.criterionId) && !s.reason.trim()) flags.push(`Trừ điểm "${c.name}" nhưng chưa nêu lỗi.`);
-    if (/thấp/i.test(s.confidence || '')) flags.push(`AI chưa chắc chắn ở tiêu chí "${c.name}".`);
+    if (/thấp/i.test(s.confidence || '')) flags.push(`Chưa chắc chắn ở tiêu chí "${c.name}".`);
   });
-  if (raw.needsTeacher) flags.push(`AI đề nghị thầy/cô xem kĩ: ${raw.needsTeacherReason || 'bài khó đánh giá'}.`);
+  if (raw.needsTeacher) flags.push(`Đề nghị thầy/cô xem kĩ: ${raw.needsTeacherReason || 'bài khó đánh giá'}.`);
   return { scores, errors, comment: raw.comment || '', flags, reviewNote: raw.reviewNote || '' };
 }
 
@@ -100,7 +100,7 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
     base.submission = { ...base.submission, images: base.submission.images.slice(0, -1) };
     dropped.push('1');
   }
-  if (dropped.length) sub.warnings = [...sub.warnings, `Bài quá nặng: ${dropped.length} hình cuối không được gửi cho AI — cần xem tay phần đó.`];
+  if (dropped.length) sub.warnings = [...sub.warnings, `Bài quá nặng: ${dropped.length} hình cuối không được chấm — cần xem tay phần đó.`];
   const first = await api<Raw>('grade', { ...base, mode: 'grade' });
   let usage = addUsage(undefined, first._usage);
   delete first._usage;
@@ -115,7 +115,7 @@ export async function gradeOne(p: Project, st: Student, onPhase: (phase: 'gradin
     const changed = p.rubric
       .map((c, i) => (firstNorm.scores[i].ai !== final.scores[i].ai ? `${c.name}: ${firstNorm.scores[i].ai} → ${final.scores[i].ai}` : ''))
       .filter(Boolean);
-    if (changed.length) final.flags.push(`Khi tự rà soát AI đã sửa điểm (${changed.join('; ')}).`);
+    if (changed.length) final.flags.push(`Khi tự rà soát đã sửa điểm (${changed.join('; ')}).`);
   } catch (e: any) {
     final.flags.push(`Lượt rà soát lại bị lỗi (${e.message}) — đang dùng kết quả chấm lần 1.`);
   }

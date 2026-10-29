@@ -113,7 +113,7 @@ export async function exportWord(p: Project): Promise<Blob> {
 
   const margin = { top: 1000, bottom: 1000, left: 1100, right: 900 };
   const doc = new Document({
-    creator: p.teacher || 'Chấm Điểm AI',
+    creator: p.teacher || 'Chấm Điểm',
     title: `Bảng điểm ${p.name}`,
     sections: [
       { properties: { page: { margin } }, children: page1 },

@@ -46,7 +46,7 @@ export default function Confirm({ p, update, files }: { p: Project; update: Upda
   const start = (mode: 'trial' | 'all') => { setSetting('autostart', mode); update({ step: 2 }); };
 
   const issues: string[] = [];
-  if (!p.examText.trim() && !p.examImages.length) issues.push('Chưa có nội dung đề bài — AI sẽ chỉ chấm theo tiêu chí.');
+  if (!p.examText.trim() && !p.examImages.length) issues.push('Chưa có nội dung đề bài — sẽ chỉ chấm theo tiêu chí.');
   if (total !== 10) issues.push(`Tổng điểm tiêu chí là ${fmt(total)} (không phải 10).`);
   p.rubric.forEach((c, i) => { if (!c.name.trim()) issues.push(`TC${i + 1} chưa có tên.`); if (!(c.max > 0)) issues.push(`TC${i + 1} có điểm tối đa bằng 0.`); });
   if (noFile.length) issues.push(`${noFile.length} HS chưa có bài nộp.`);
@@ -64,8 +64,8 @@ export default function Confirm({ p, update, files }: { p: Project; update: Upda
             <tr><th>Đề bài</th><td>{p.examFileName || 'Gõ trực tiếp'} · {p.examText.length} ký tự{p.examImages.length ? ` · ${p.examImages.length} hình` : ''}<div className="preview">{p.examText.slice(0, 400)}{p.examText.length > 400 && '…'}</div></td></tr>
             <tr><th>Tiêu chí</th><td>{p.rubric.length} tiêu chí, tổng {fmt(total)} điểm, bước điểm {fmt(p.scoreStep)}
               <ol className="small">{p.rubric.map((c) => <li key={c.id}>{c.name} — <b>{fmt(c.max)}đ</b>{c.desc && <span className="muted"> · {c.desc.slice(0, 140)}</span>}</li>)}</ol></td></tr>
-            <tr><th>Phạm vi kiến thức</th><td>{p.curriculum || 'Tin học 6 – Kết nối tri thức'}{p.sgkTitles?.length ? <div className="small">SGK làm chuẩn: {p.sgkTitles.join('; ')}</div> : null}{p.textbook ? <div className="small">Ghi chú kiến thức thêm: {p.textbook.length.toLocaleString('vi-VN')} ký tự</div> : null}{!p.sgkTitles?.length && !p.textbook && <span className="warn-text"> · chưa có nội dung SGK — AI chấm theo hiểu biết chung, nên tải SGK của khối ở bước 1</span>}</td></tr>
-            <tr><th>Yêu cầu chấm</th><td className="pre">{p.instructions || <span className="muted">(không có — AI chấm theo tiêu chí)</span>}</td></tr>
+            <tr><th>Phạm vi kiến thức</th><td>{p.curriculum || 'Tin học 6 – Kết nối tri thức'}{p.sgkTitles?.length ? <div className="small">SGK làm chuẩn: {p.sgkTitles.join('; ')}</div> : null}{p.textbook ? <div className="small">Ghi chú kiến thức thêm: {p.textbook.length.toLocaleString('vi-VN')} ký tự</div> : null}{!p.sgkTitles?.length && !p.textbook && <span className="warn-text"> · chưa có nội dung SGK — chấm theo hiểu biết chung, nên tải SGK của khối ở bước 1</span>}</td></tr>
+            <tr><th>Yêu cầu chấm</th><td className="pre">{p.instructions || <span className="muted">(không có — chấm theo tiêu chí)</span>}</td></tr>
             <tr><th>Danh sách lớp</th><td>{p.students.length} học sinh ({p.rosterFileName})</td></tr>
             <tr><th>Bài làm</th><td>{p.students.length - noFile.length}/{p.students.length} HS đã có file{multi.length ? ` · ${multi.length} HS có nhiều file (sẽ chấm gộp)` : ''}</td></tr>
           </tbody>
@@ -109,7 +109,7 @@ export default function Confirm({ p, update, files }: { p: Project; update: Upda
 
       <section className="card">
         <h2>Đọc bài làm</h2>
-        <p className="muted small">Hệ thống mở từng file, trích nội dung và định dạng (cỡ chữ, căn lề, hiệu ứng, khối lệnh Scratch…) để AI chấm và để bôi đỏ lỗi khi bạn duyệt.</p>
+        <p className="muted small">Hệ thống mở từng file, trích nội dung và định dạng (cỡ chữ, căn lề, hiệu ứng, khối lệnh Scratch…) để chấm và để bôi đỏ lỗi khi bạn duyệt.</p>
         <div className="row">
           <button className="btn" disabled={!!reading} onClick={readAll}>{readCount ? 'Đọc lại toàn bộ bài' : 'Đọc bài làm'}</button>
           {reading && <span className="muted">Đang đọc {reading.done}/{reading.total}…</span>}
@@ -122,7 +122,7 @@ export default function Confirm({ p, update, files }: { p: Project; update: Upda
 
       <div className="actions">
         <button className="btn" onClick={() => update({ step: 0 })}>← Sửa nhập liệu</button>
-        <button className="btn" disabled={!readCount} onClick={() => start('trial')} title="Chấm 2 bài đầu để bạn xem cách AI chấm trước">Chấm thử 2 bài</button>
+        <button className="btn" disabled={!readCount} onClick={() => start('trial')} title="Chấm 2 bài đầu để bạn xem cách chấm trước">Chấm thử 2 bài</button>
         <button className="btn primary big" disabled={!readCount} onClick={() => start('all')}>Xác nhận & chấm cả lớp →</button>
       </div>
     </div>

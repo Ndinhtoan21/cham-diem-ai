@@ -29,4 +29,7 @@ cpSync('index.html', 'dist/index.html');
 cpSync('public', 'dist', { recursive: true });
 const pdfWorker = require.resolve('pdfjs-dist/build/pdf.worker.min.mjs', { paths: [process.cwd(), ...nodePaths] });
 cpSync(pdfWorker, 'dist/pdf.worker.min.mjs');
+// bảng mã chữ, phông chuẩn, bộ giải mã ảnh của pdf.js (đọc PDF tiếng Việt, PDF scan)
+const pdfRoot = path.dirname(path.dirname(pdfWorker));
+for (const d of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) if (existsSync(path.join(pdfRoot, d))) cpSync(path.join(pdfRoot, d), `dist/pdfjs/${d}`, { recursive: true });
 console.log('Built dist/', existsSync('dist/assets/app.js') ? 'OK' : 'MISSING');

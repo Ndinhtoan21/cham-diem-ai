@@ -22,7 +22,7 @@ export default function ClassBooks() {
       <div className="home-head">
         <div>
           <h1>Sổ điểm lớp</h1>
-          <p className="muted">Mỗi lớp có 4 cột điểm cho mỗi học kì: TX1, TX2, GK, CK. Điểm chấm bằng AI được ghi vào đây khi bạn chốt; điểm TX bạn dán từ Excel.</p>
+          <p className="muted">Mỗi lớp có 4 cột điểm cho mỗi học kì: TX1, TX2, GK, CK. Điểm do hệ thống chấm được ghi vào đây khi bạn chốt; điểm TX bạn dán từ Excel.</p>
         </div>
         <button className="btn primary" onClick={() => setAdding(true)}>+ Thêm lớp</button>
       </div>
